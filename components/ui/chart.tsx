@@ -1,5 +1,7 @@
 'use client';
 
+/* oxlint-disable typescript/restrict-template-expressions */
+
 import * as React from 'react';
 import * as RechartsPrimitive from 'recharts';
 import type { TooltipValueType } from 'recharts';
