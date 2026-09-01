@@ -33,6 +33,11 @@ jobs:
       - name: Build static prototype
         run: npm run build
 
+      - name: Prepare GitHub Pages paths
+        run: |
+          mv dist/client/theater-probenplan-prototyp/_next dist/client/_next
+          rmdir dist/client/theater-probenplan-prototyp
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
