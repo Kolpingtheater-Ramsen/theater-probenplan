@@ -2225,10 +2225,11 @@ function ReminderRow({
         aria-checked={checked}
         aria-label={label}
         onClick={() => onChange(!checked)}
-        className={`relative h-[18px] w-8 rounded-full transition ${checked ? 'bg-primary' : 'bg-input'}`}
+        className={`relative h-6 w-11 shrink-0 overflow-hidden rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${checked ? 'bg-primary' : 'bg-input'}`}
       >
         <span
-          className={`absolute top-px size-4 rounded-full bg-background transition-transform ${checked ? 'translate-x-[15px]' : 'translate-x-px'}`}
+          aria-hidden="true"
+          className={`absolute left-0 top-0.5 size-5 rounded-full bg-background shadow-sm transition-transform ${checked ? 'translate-x-[22px]' : 'translate-x-0.5'}`}
         />
       </button>
     </div>
