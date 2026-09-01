@@ -45,6 +45,7 @@ Für eine Dokploy-Compose-Anwendung reicht die committed `compose.yaml`; das ben
 ## Prüfungen
 
 ```bash
+npm test
 npm run typecheck
 npm run lint
 npm run build
