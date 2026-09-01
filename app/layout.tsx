@@ -16,6 +16,9 @@ const assetPrefix =
   process.env.GITHUB_ACTIONS === 'true' ? '/theater-probenplan-prototyp' : '';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    'https://loggel.github.io/theater-probenplan-prototyp/',
+  ),
   title: 'Bühnenplan | Kolpingtheater Ramsen',
   description:
     'Klickprototyp für Proben, Termine, Anwesenheit und Organisation im Theaterverein.',
