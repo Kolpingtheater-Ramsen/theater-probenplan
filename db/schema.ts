@@ -28,6 +28,7 @@ export const schemaStatements = [
     group_name TEXT NOT NULL,
     role_name TEXT NOT NULL DEFAULT '',
     initials TEXT NOT NULL,
+    avatar_url TEXT,
     active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))
   )`,
   `CREATE TABLE IF NOT EXISTS events (

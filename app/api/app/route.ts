@@ -59,9 +59,11 @@ export function GET(request: NextRequest) {
     : organizationDefault;
   const memberProfile = db
     .prepare(
-      'SELECT group_name AS groupName FROM members WHERE lower(email) = lower(?)',
+      'SELECT group_name AS groupName, avatar_url AS avatar FROM members WHERE lower(email) = lower(?)',
     )
-    .get(user.email) as { groupName: string } | undefined;
+    .get(user.email) as
+    | { groupName: string; avatar: string | null }
+    | undefined;
   const eventRows = db
     .prepare(`SELECT id, day, month, weekday, title, time_label AS time, place, group_name AS 'group', people, kind AS type, tone, locked, is_custom AS isCustom
     FROM events ORDER BY COALESCE(starts_at, created_at), created_at`)
@@ -132,22 +134,19 @@ export function GET(request: NextRequest) {
           }
         ).count
       : absences.length;
-  const members =
-    user.role === 'admin'
-      ? db
-          .prepare(`SELECT m.id, m.name, CASE WHEN m.role_name = '' THEN m.group_name ELSE m.group_name || ' · ' || m.role_name END AS 'group', m.initials,
+  const members = db
+    .prepare(`SELECT m.id, m.name, CASE WHEN m.role_name = '' THEN m.group_name ELSE m.group_name || ' · ' || m.role_name END AS 'group', m.initials, m.avatar_url AS avatar,
     COALESCE(c.present, m.active) AS present FROM members m LEFT JOIN checkins c ON c.member_id = m.id AND c.event_id = 'weekly-03' ORDER BY m.name`)
-          .all()
-          .map((row) => ({
-            ...(row as object),
-            present: Boolean((row as { present: number }).present),
-          }))
-      : [];
+    .all()
+    .map((row) => ({
+      ...(row as object),
+      present: Boolean((row as { present: number }).present),
+    }));
   const accounts =
     user.role === 'admin'
       ? db
           .prepare(`SELECT p.user_id AS userId, p.display_name AS name, p.email, p.role,
-    CASE WHEN m.role_name = '' OR m.role_name IS NULL THEN COALESCE(m.group_name, '') ELSE m.group_name || ' · ' || m.role_name END AS 'group',
+    CASE WHEN m.role_name = '' OR m.role_name IS NULL THEN COALESCE(m.group_name, '') ELSE m.group_name || ' · ' || m.role_name END AS 'group', m.avatar_url AS avatar,
     tc.temporary_password AS temporaryPassword
     FROM profiles p LEFT JOIN members m ON lower(m.email) = lower(p.email)
     LEFT JOIN temporary_credentials tc ON tc.user_id = p.user_id
@@ -177,7 +176,7 @@ export function GET(request: NextRequest) {
     (event) => (event as { isCustom: boolean }).isCustom,
   );
   return NextResponse.json({
-    user,
+    user: { ...user, avatar: memberProfile?.avatar ?? null },
     events,
     customEvents,
     attendanceByEvent,

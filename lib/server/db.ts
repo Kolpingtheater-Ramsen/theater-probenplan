@@ -27,6 +27,11 @@ function createDatabase() {
   database.pragma('busy_timeout = 5000');
   database.transaction(() => {
     for (const statement of schemaStatements) database.prepare(statement).run();
+    const memberColumns = database
+      .prepare('PRAGMA table_info(members)')
+      .all() as Array<{ name: string }>;
+    if (!memberColumns.some((column) => column.name === 'avatar_url'))
+      database.prepare('ALTER TABLE members ADD COLUMN avatar_url TEXT').run();
   })();
   database.pragma('optimize');
   return database;
@@ -145,10 +150,10 @@ export function seedOrganization() {
       'SELECT id, email FROM members WHERE lower(name) = lower(?) LIMIT 1',
     );
     const insertMember = db.prepare(
-      'INSERT INTO members (email, name, group_name, role_name, initials, active) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO members (email, name, group_name, role_name, initials, avatar_url, active) VALUES (?, ?, ?, ?, ?, ?, ?)',
     );
     const updateMember = db.prepare(
-      `UPDATE members SET email = ?, group_name = ?, role_name = ?, initials = ?, active = ? WHERE id = ?`,
+      `UPDATE members SET email = ?, group_name = ?, role_name = ?, initials = ?, avatar_url = ?, active = ? WHERE id = ?`,
     );
     for (const member of organizationMemberSeeds) {
       const existing = findMember.get(member.name) as
@@ -160,6 +165,7 @@ export function seedOrganization() {
           member.groupName,
           member.roleName,
           member.initials,
+          member.avatar,
           member.active,
           existing.id,
         );
@@ -170,6 +176,7 @@ export function seedOrganization() {
           member.groupName,
           member.roleName,
           member.initials,
+          member.avatar,
           member.active,
         );
     }

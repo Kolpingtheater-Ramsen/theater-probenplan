@@ -73,6 +73,15 @@ type AppUser = {
   displayName: string;
   role: 'member' | 'admin';
   mustChangePassword: boolean;
+  avatar: string | null;
+};
+type MemberProfile = {
+  id: number;
+  name: string;
+  group: string;
+  initials: string;
+  avatar: string | null;
+  present: boolean;
 };
 type AccountAccess = {
   userId: string;
@@ -80,6 +89,7 @@ type AccountAccess = {
   email: string;
   role: 'member' | 'admin';
   group: string;
+  avatar: string | null;
   temporaryPassword: string | null;
 };
 type AuthStatus = {
@@ -95,7 +105,7 @@ type AppSnapshot = {
   declineReasons: Record<string, string>;
   absences: AbsenceRecord[];
   organizationAbsenceCount: number;
-  members: typeof memberSeed;
+  members: MemberProfile[];
   accounts: AccountAccess[];
   pollChoice: string;
   pollConfirmed: boolean;
@@ -187,65 +197,6 @@ const baseEvents: EventItem[] = [
     people: 31,
     type: 'weekly',
     tone: 'orange',
-  },
-];
-
-const memberSeed = [
-  {
-    id: 1,
-    name: 'Logge',
-    group: 'Ensemble · Bote / Diener',
-    initials: 'LO',
-    present: true,
-  },
-  {
-    id: 2,
-    name: 'Noah Becker',
-    group: 'Jugend',
-    initials: 'NB',
-    present: true,
-  },
-  {
-    id: 3,
-    name: 'Mia Wagner',
-    group: 'Jugend',
-    initials: 'MW',
-    present: false,
-  },
-  {
-    id: 4,
-    name: 'Jonas Hoffmann',
-    group: 'Ensemble',
-    initials: 'JH',
-    present: true,
-  },
-  {
-    id: 5,
-    name: 'Sarah Klein',
-    group: 'Ensemble',
-    initials: 'SK',
-    present: true,
-  },
-  {
-    id: 6,
-    name: 'Tobias Hartmann',
-    group: 'Ensemble',
-    initials: 'TH',
-    present: false,
-  },
-  {
-    id: 7,
-    name: 'Emilia Schmitt',
-    group: 'Jugend',
-    initials: 'ES',
-    present: true,
-  },
-  {
-    id: 8,
-    name: 'Felix Braun',
-    group: 'Technik',
-    initials: 'FB',
-    present: true,
   },
 ];
 
@@ -380,21 +331,66 @@ function StatusPill({
   );
 }
 
-function MemberAvatars({ count = 4 }: { count?: number }) {
+function ProfileAvatar({
+  name,
+  initials,
+  avatar,
+  size = 'md',
+  className = '',
+}: {
+  name: string;
+  initials: string;
+  avatar: string | null;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  className?: string;
+}) {
+  const sizeClass = {
+    xs: 'size-5 text-[7px]',
+    sm: 'size-8 text-[9px]',
+    md: 'size-10 text-[10px]',
+    lg: 'size-12 text-xs',
+  }[size];
+  return (
+    <span
+      title={name}
+      className={`relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-muted font-bold ${sizeClass} ${className}`}
+    >
+      {avatar ? (
+        <Image
+          src={avatar}
+          alt={`Profilbild von ${name}`}
+          width={96}
+          height={96}
+          className="size-full object-cover"
+        />
+      ) : (
+        initials
+      )}
+    </span>
+  );
+}
+
+function MemberAvatars({
+  members,
+  count = 4,
+}: {
+  members: MemberProfile[];
+  count?: number;
+}) {
   return (
     <div
       className="flex -space-x-2"
       aria-label={`${count} beispielhafte Teilnehmende`}
     >
-      {memberSeed.slice(0, count).map((member, index) => (
-        <div
+      {members.slice(0, count).map((member) => (
+        <ProfileAvatar
           key={member.id}
-          title={member.name}
-          className="grid size-8 place-items-center rounded-full border-2 border-card bg-muted text-[9px] font-bold"
-          style={{ zIndex: count - index }}
-        >
-          {member.initials}
-        </div>
+          name={member.name}
+          initials={member.initials}
+          avatar={member.avatar}
+          size="sm"
+          className="border-2 border-card"
+        />
       ))}
     </div>
   );
@@ -426,7 +422,7 @@ export default function Home() {
   const [customEvents, setCustomEvents] = useState<EventItem[]>([]);
   const [pollChoice, setPollChoice] = useState('sat');
   const [pollConfirmed, setPollConfirmed] = useState(false);
-  const [members, setMembers] = useState(memberSeed);
+  const [members, setMembers] = useState<MemberProfile[]>([]);
   const [accounts, setAccounts] = useState<AccountAccess[]>([]);
   const [checkinSaved, setCheckinSaved] = useState(false);
   const [adminNotice, setAdminNotice] = useState('');
@@ -922,9 +918,12 @@ export default function Home() {
             onClick={() => navigate('dashboard')}
             className="flex w-full items-center gap-3 rounded-sm bg-muted/50 p-3 text-left hover:bg-muted"
           >
-            <div className="grid size-9 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">
-              {initials}
-            </div>
+            <ProfileAvatar
+              name={appUser.displayName}
+              initials={initials}
+              avatar={appUser.avatar}
+              className="bg-primary/15 text-primary"
+            />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">
                 {appUser.displayName}
@@ -982,9 +981,12 @@ export default function Home() {
               <Bell className="size-4" />
               <span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" />
             </button>
-            <div className="grid size-10 place-items-center rounded-full bg-primary text-xs font-black text-primary-foreground lg:hidden">
-              {initials}
-            </div>
+            <ProfileAvatar
+              name={appUser.displayName}
+              initials={initials}
+              avatar={appUser.avatar}
+              className="bg-primary text-primary-foreground lg:hidden"
+            />
           </div>
         </header>
 
@@ -1022,9 +1024,12 @@ export default function Home() {
               confirmed={pollConfirmed}
               navigate={navigate}
               canManage={appUser.role === 'admin'}
+              members={members}
             />
           )}
-          {view === 'stats' && <StatsView displayName={appUser.displayName} />}
+          {view === 'stats' && (
+            <StatsView displayName={appUser.displayName} members={members} />
+          )}
           {view === 'admin' && appUser.role === 'admin' && (
             <AdminView
               notice={adminNotice}
@@ -1066,6 +1071,7 @@ export default function Home() {
               absenceCount={organizationAbsenceCount}
               openMember={() => setMemberOpen(true)}
               accounts={accounts}
+              members={members}
               currentUserId={appUser.userId}
               resetAccountPassword={(account) =>
                 void resetAccountPassword(account)
@@ -1135,6 +1141,7 @@ export default function Home() {
 
       <EventDialog
         event={selectedEvent}
+        members={members}
         onClose={() => setSelectedEvent(null)}
         attendance={
           selectedEvent
@@ -2519,12 +2526,14 @@ function PollsView({
   confirmed,
   navigate,
   canManage,
+  members,
 }: {
   choice: string;
   setChoice: (value: string) => void;
   confirmed: boolean;
   navigate: (view: View) => void;
   canManage: boolean;
+  members: MemberProfile[];
 }) {
   return (
     <>
@@ -2592,7 +2601,7 @@ function PollsView({
           </div>
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
             <div className="flex items-center gap-3">
-              <MemberAvatars />
+              <MemberAvatars members={members} />
               <p className="text-xs text-muted-foreground">
                 39 Stimmen
                 <br />8 noch offen
@@ -2656,7 +2665,16 @@ function PollsView({
   );
 }
 
-function StatsView({ displayName }: { displayName: string }) {
+function StatsView({
+  displayName,
+  members,
+}: {
+  displayName: string;
+  members: MemberProfile[];
+}) {
+  const ownMember = members.find((member) => member.name === displayName);
+  const firstMember = members.find((member) => member.name === 'Carina');
+  const thirdMember = members.find((member) => member.name === 'Jonas');
   return (
     <>
       <SectionHeading
@@ -2770,9 +2788,25 @@ function StatsView({ displayName }: { displayName: string }) {
           </StatusPill>
         </div>
         <div className="mt-6 grid gap-3 md:grid-cols-3">
-          <ChallengeRank rank="1" name="Sarah Klein" value="12 Proben" />
-          <ChallengeRank rank="2" name={displayName} value="11 Proben" accent />
-          <ChallengeRank rank="3" name="Jonas Hoffmann" value="10 Proben" />
+          <ChallengeRank
+            rank="1"
+            name={firstMember?.name ?? 'Carina'}
+            value="12 Proben"
+            member={firstMember}
+          />
+          <ChallengeRank
+            rank="2"
+            name={displayName}
+            value="11 Proben"
+            member={ownMember}
+            accent
+          />
+          <ChallengeRank
+            rank="3"
+            name={thirdMember?.name ?? 'Jonas'}
+            value="10 Proben"
+            member={thirdMember}
+          />
         </div>
         <p className="mt-4 text-[10px] leading-relaxed text-muted-foreground">
           Die Challenge ist freiwillig. Kinder und nicht teilnehmende Mitglieder
@@ -2799,11 +2833,13 @@ function ChallengeRank({
   rank,
   name,
   value,
+  member,
   accent = false,
 }: {
   rank: string;
   name: string;
   value: string;
+  member?: MemberProfile;
   accent?: boolean;
 }) {
   return (
@@ -2815,6 +2851,14 @@ function ChallengeRank({
       >
         {rank}
       </span>
+      {member && (
+        <ProfileAvatar
+          name={member.name}
+          initials={member.initials}
+          avatar={member.avatar}
+          size="sm"
+        />
+      )}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold">{name}</p>
         <p className="mt-1 text-[10px] text-muted-foreground">
@@ -2905,6 +2949,7 @@ function AdminView({
   remindOpenResponses,
   absenceCount,
   accounts,
+  members,
   currentUserId,
   resetAccountPassword,
 }: {
@@ -2932,6 +2977,7 @@ function AdminView({
   remindOpenResponses: () => void;
   absenceCount: number;
   accounts: AccountAccess[];
+  members: MemberProfile[];
   currentUserId: string;
   resetAccountPassword: (account: AccountAccess) => void;
 }) {
@@ -3126,20 +3172,25 @@ function AdminView({
             </Button>
           </div>
           <div className="divide-y divide-border">
-            {memberSeed.slice(2, 6).map((member) => (
-              <div key={member.id} className="flex items-center gap-3 p-4">
-                <div className="grid size-9 place-items-center rounded-full bg-muted text-[10px] font-bold">
-                  {member.initials}
+            {members
+              .filter((member) => !member.present)
+              .slice(0, 4)
+              .map((member) => (
+                <div key={member.id} className="flex items-center gap-3 p-4">
+                  <ProfileAvatar
+                    name={member.name}
+                    initials={member.initials}
+                    avatar={member.avatar}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold">{member.name}</p>
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                      {member.group}
+                    </p>
+                  </div>
+                  <StatusPill tone="warning">Rückmeldung offen</StatusPill>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">{member.name}</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    {member.group}
-                  </p>
-                </div>
-                <StatusPill tone="warning">Rückmeldung offen</StatusPill>
-              </div>
-            ))}
+              ))}
           </div>
         </section>
         <section className="border border-border bg-card p-5">
@@ -3231,14 +3282,17 @@ function AdminView({
               className="border border-border bg-background p-4"
             >
               <div className="flex items-start gap-3">
-                <div className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  {account.name
+                <ProfileAvatar
+                  name={account.name}
+                  initials={account.name
                     .split(/\s+/)
                     .map((part) => part[0])
                     .join('')
                     .slice(0, 2)
                     .toUpperCase()}
-                </div>
+                  avatar={account.avatar}
+                  className="bg-primary/10 text-primary"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-bold">{account.name}</p>
@@ -3316,8 +3370,8 @@ function CheckinView({
   navigate,
   roleLabel,
 }: {
-  members: typeof memberSeed;
-  setMembers: React.Dispatch<React.SetStateAction<typeof memberSeed>>;
+  members: MemberProfile[];
+  setMembers: React.Dispatch<React.SetStateAction<MemberProfile[]>>;
   saved: boolean;
   setSaved: (value: boolean) => void;
   saveCheckin: () => Promise<void>;
@@ -3404,9 +3458,11 @@ function CheckinView({
                   }
                   className="size-5 accent-[#c94f1d]"
                 />
-                <div className="grid size-10 place-items-center rounded-full bg-muted text-[10px] font-bold">
-                  {member.initials}
-                </div>
+                <ProfileAvatar
+                  name={member.name}
+                  initials={member.initials}
+                  avatar={member.avatar}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">{member.name}</p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -3640,7 +3696,7 @@ function ParticipantList({
 }: {
   title: string;
   tone: 'yes' | 'no' | 'open';
-  members: Array<(typeof memberSeed)[number]>;
+  members: MemberProfile[];
   remaining: number;
 }) {
   const toneClass =
@@ -3657,9 +3713,13 @@ function ParticipantList({
       <div className="mt-2 space-y-1.5">
         {members.map((member) => (
           <div key={member.id} className="flex items-center gap-2">
-            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-white/75 text-[7px] font-bold">
-              {member.initials}
-            </span>
+            <ProfileAvatar
+              name={member.name}
+              initials={member.initials}
+              avatar={member.avatar}
+              size="xs"
+              className="bg-white/75"
+            />
             <span className="truncate text-[9px] font-medium">
               {member.name}
             </span>
@@ -3675,6 +3735,7 @@ function ParticipantList({
 
 function EventDialog({
   event,
+  members,
   onClose,
   attendance,
   savedDeclineReason,
@@ -3684,6 +3745,7 @@ function EventDialog({
   openGoogleCalendar,
 }: {
   event: EventItem | null;
+  members: MemberProfile[];
   onClose: () => void;
   attendance: Attendance;
   savedDeclineReason: string;
@@ -3695,23 +3757,27 @@ function EventDialog({
   const [declineOpen, setDeclineOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const participantGroups = useMemo(() => {
-    const logge = memberSeed[0];
+    const logge = members.find((member) => member.name === 'Logge');
+    const attending = members.filter((member) => member.present);
+    const absent = members.filter((member) => !member.present);
     return {
       yes: [
-        ...(attendance === 'yes' ? [logge] : []),
-        memberSeed[1],
-        memberSeed[3],
-        memberSeed[4],
-        memberSeed[6],
+        ...(attendance === 'yes' && logge ? [logge] : []),
+        ...attending.filter((member) => member.id !== logge?.id).slice(0, 4),
       ],
       no: [
-        ...(attendance === 'no' ? [logge] : []),
-        memberSeed[5],
-        memberSeed[7],
+        ...(attendance === 'no' && logge ? [logge] : []),
+        ...absent.filter((member) => member.id !== logge?.id).slice(0, 2),
       ],
-      open: [...(attendance === 'open' ? [logge] : []), memberSeed[2]],
+      open:
+        attendance === 'open' && logge
+          ? [
+              logge,
+              ...members.filter((member) => member.id !== logge.id).slice(0, 1),
+            ]
+          : members.slice(0, 2),
     };
-  }, [attendance]);
+  }, [attendance, members]);
   if (!event) return null;
   return (
     <Dialog
@@ -3767,7 +3833,7 @@ function EventDialog({
           <div className="mt-5 border border-border bg-background p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-bold">Teilnahmestand</p>
-              <MemberAvatars />
+              <MemberAvatars members={members} />
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2 text-center">
               <div className="border border-emerald-600/20 bg-emerald-50 p-2">
