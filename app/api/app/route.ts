@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAuthUser, hashPassword, sameOrigin } from '@/lib/server/auth';
+import { generateTemporaryPassword, seedMemberAccounts } from '@/lib/server/accounts';
 import { getDatabase, seedOrganization } from '@/lib/server/db';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,7 @@ export function GET(request: NextRequest) {
   const user = getAuthUser(request);
   if (!user) return unauthorized();
   seedOrganization();
+  if (user.role === 'admin') seedMemberAccounts();
   const db = getDatabase();
   const orgSettings = db.prepare('SELECT settings_json AS settingsJson FROM organization_settings WHERE id = 1').get() as { settingsJson: string } | undefined;
   const organization = orgSettings ? JSON.parse(orgSettings.settingsJson) as typeof organizationDefault : organizationDefault;
@@ -50,6 +52,12 @@ export function GET(request: NextRequest) {
   const absences = db.prepare('SELECT id, date_from AS "from", date_to AS "to", reason FROM absences WHERE user_id = ? ORDER BY date_from').all(user.userId);
   const members = user.role === 'admin' ? db.prepare(`SELECT m.id, m.name, CASE WHEN m.role_name = '' THEN m.group_name ELSE m.group_name || ' · ' || m.role_name END AS 'group', m.initials,
     COALESCE(c.present, m.active) AS present FROM members m LEFT JOIN checkins c ON c.member_id = m.id AND c.event_id = 'weekly-03' ORDER BY m.name`).all().map((row) => ({ ...(row as object), present: Boolean((row as { present: number }).present) })) : [];
+  const accounts = user.role === 'admin' ? db.prepare(`SELECT p.user_id AS userId, p.display_name AS name, p.email, p.role,
+    CASE WHEN m.role_name = '' OR m.role_name IS NULL THEN COALESCE(m.group_name, '') ELSE m.group_name || ' · ' || m.role_name END AS 'group',
+    tc.temporary_password AS temporaryPassword
+    FROM profiles p LEFT JOIN members m ON lower(m.email) = lower(p.email)
+    LEFT JOIN temporary_credentials tc ON tc.user_id = p.user_id
+    ORDER BY CASE p.role WHEN 'admin' THEN 0 ELSE 1 END, p.display_name`).all() : [];
   const poll = db.prepare("SELECT confirmed_option_id AS confirmedOptionId FROM polls WHERE id = 'maskenball'").get() as { confirmedOptionId: string | null };
   const vote = db.prepare("SELECT option_id AS optionId FROM poll_votes WHERE poll_id = 'maskenball' AND user_id = ?").get(user.userId) as { optionId: string } | undefined;
   const pollOptions = db.prepare(`SELECT o.id, o.day_label AS day, o.time_label AS time, o.votes_seed + COUNT(v.user_id) AS votes
@@ -64,6 +72,7 @@ export function GET(request: NextRequest) {
     declineReasons,
     absences,
     members,
+    accounts,
     pollChoice: vote?.optionId ?? 'sat',
     pollConfirmed: Boolean(poll?.confirmedOptionId),
     pollOptions,
@@ -85,6 +94,7 @@ const actionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('settings.organization'), value: z.object({ automations: z.object({ weekly: z.boolean(), noResponse: z.boolean(), parents: z.boolean() }), groupVisibility: z.object({ techOnly: z.boolean(), costumeOnly: z.boolean() }) }) }),
   z.object({ action: z.literal('reminders.send'), eventId: z.string().min(1).max(100).default('weekly-03') }),
   z.object({ action: z.literal('account.create'), name: z.string().trim().min(2).max(80), email: z.email().transform((value) => value.toLowerCase()), password: z.string().min(12).max(200), group: z.string().trim().min(1).max(80), roleName: z.string().trim().max(80).default(''), profileRole: z.enum(['member', 'admin']).default('member') }),
+  z.object({ action: z.literal('account.resetPassword'), userId: z.uuid() }),
 ]);
 
 export async function POST(request: NextRequest) {
@@ -168,6 +178,8 @@ export async function POST(request: NextRequest) {
         db.transaction(() => {
           db.prepare('INSERT INTO profiles (user_id, email, display_name, password_hash, role) VALUES (?, ?, ?, ?, ?)')
             .run(userId, input.email, input.name, hashPassword(input.password), input.profileRole);
+          db.prepare('INSERT INTO temporary_credentials (user_id, temporary_password) VALUES (?, ?)')
+            .run(userId, input.password);
           db.prepare('INSERT INTO members (email, name, group_name, role_name, initials) VALUES (?, ?, ?, ?, ?)')
             .run(input.email, input.name, input.group, input.roleName, initials);
         })();
@@ -175,6 +187,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'E-Mail ist bereits vergeben oder das Mitglied konnte nicht angelegt werden.' }, { status: 409 });
       }
       audit(user.userId, 'account.created', 'profile', userId);
+    } else if (input.action === 'account.resetPassword') {
+      if (input.userId === user.userId) return NextResponse.json({ error: 'Das eigene Passwort kann hier nicht zurückgesetzt werden.' }, { status: 400 });
+      const target = db.prepare('SELECT user_id FROM profiles WHERE user_id = ?').get(input.userId);
+      if (!target) return NextResponse.json({ error: 'Konto nicht gefunden.' }, { status: 404 });
+      const temporaryPassword = generateTemporaryPassword();
+      db.transaction(() => {
+        db.prepare('UPDATE profiles SET password_hash = ?, failed_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?')
+          .run(hashPassword(temporaryPassword), input.userId);
+        db.prepare(`INSERT INTO temporary_credentials (user_id, temporary_password) VALUES (?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET temporary_password = excluded.temporary_password, created_at = CURRENT_TIMESTAMP`)
+          .run(input.userId, temporaryPassword);
+        db.prepare('DELETE FROM sessions WHERE user_id = ?').run(input.userId);
+      })();
+      audit(user.userId, 'password.reset', 'profile', input.userId);
     }
   }
 

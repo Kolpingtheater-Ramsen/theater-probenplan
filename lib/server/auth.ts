@@ -5,7 +5,7 @@ import { getDatabase } from './db';
 const cookieName = 'theater_session';
 const sessionDays = 30;
 
-export type AuthUser = { userId: string; email: string; displayName: string; role: 'member' | 'admin' };
+export type AuthUser = { userId: string; email: string; displayName: string; role: 'member' | 'admin'; mustChangePassword: boolean };
 
 export function hashPassword(password: string) {
   const salt = randomBytes(16);
@@ -45,10 +45,11 @@ export function clearSessionCookie(response: NextResponse) {
 export function getAuthUser(request: NextRequest): AuthUser | null {
   const token = request.cookies.get(cookieName)?.value;
   if (!token) return null;
-  const row = getDatabase().prepare(`SELECT p.user_id AS userId, p.email, p.display_name AS displayName, p.role
+  const row = getDatabase().prepare(`SELECT p.user_id AS userId, p.email, p.display_name AS displayName, p.role,
+      EXISTS(SELECT 1 FROM temporary_credentials tc WHERE tc.user_id = p.user_id) AS mustChangePassword
     FROM sessions s JOIN profiles p ON p.user_id = s.user_id
-    WHERE s.token_hash = ? AND s.expires_at > ?`).get(tokenHash(token), new Date().toISOString()) as AuthUser | undefined;
-  return row ?? null;
+    WHERE s.token_hash = ? AND s.expires_at > ?`).get(tokenHash(token), new Date().toISOString()) as (Omit<AuthUser, 'mustChangePassword'> & { mustChangePassword: number }) | undefined;
+  return row ? { ...row, mustChangePassword: Boolean(row.mustChangePassword) } : null;
 }
 
 export function deleteSession(request: NextRequest) {

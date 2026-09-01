@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSession, hashPassword, sameOrigin, setSessionCookie } from '@/lib/server/auth';
+import { seedMemberAccounts } from '@/lib/server/accounts';
 import { getDatabase, seedOrganization } from '@/lib/server/db';
 
 const setupSchema = z.object({
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
     db.prepare("INSERT INTO profiles (user_id, email, display_name, password_hash, role) VALUES (?, ?, ?, ?, 'admin')")
       .run(userId, parsed.data.email, parsed.data.name, hashPassword(parsed.data.password));
     seedOrganization();
+    seedMemberAccounts();
   } catch {
     return NextResponse.json({ error: 'Die Einrichtung konnte nicht gespeichert werden.' }, { status: 409 });
   }

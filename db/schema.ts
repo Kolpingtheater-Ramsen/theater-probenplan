@@ -16,6 +16,11 @@ export const schemaStatements = [
     expires_at TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
+  `CREATE TABLE IF NOT EXISTS temporary_credentials (
+    user_id TEXT PRIMARY KEY REFERENCES profiles(user_id) ON DELETE CASCADE,
+    temporary_password TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE TABLE IF NOT EXISTS members (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE,

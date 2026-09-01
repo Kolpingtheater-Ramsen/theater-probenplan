@@ -25,6 +25,7 @@ import {
   Download,
   ExternalLink,
   LayoutDashboard,
+  KeyRound,
   LockKeyhole,
   MapPin,
   Megaphone,
@@ -38,7 +39,6 @@ import {
   ThumbsUp,
   Trophy,
   UserCheck,
-  UserCog,
   Users,
   Vote,
   WandSparkles,
@@ -67,7 +67,8 @@ import { Textarea } from '@/components/ui/textarea';
 type View = 'dashboard' | 'calendar' | 'polls' | 'stats' | 'admin' | 'checkin';
 type Attendance = 'open' | 'yes' | 'no';
 type AbsenceRecord = { id: string; from: string; to: string; reason: string };
-type AppUser = { userId: string; email: string; displayName: string; role: 'member' | 'admin' };
+type AppUser = { userId: string; email: string; displayName: string; role: 'member' | 'admin'; mustChangePassword: boolean };
+type AccountAccess = { userId: string; name: string; email: string; role: 'member' | 'admin'; group: string; temporaryPassword: string | null };
 type AuthStatus = { needsSetup: boolean; authenticated: boolean; user: AppUser | null };
 type AppSnapshot = {
   user: AppUser;
@@ -77,6 +78,7 @@ type AppSnapshot = {
   declineReasons: Record<string, string>;
   absences: AbsenceRecord[];
   members: typeof memberSeed;
+  accounts: AccountAccess[];
   pollChoice: string;
   pollConfirmed: boolean;
   reminders: { dayBefore: boolean; twoHours: boolean; changes: boolean };
@@ -310,6 +312,7 @@ export default function Home() {
   const [pollChoice, setPollChoice] = useState('sat');
   const [pollConfirmed, setPollConfirmed] = useState(false);
   const [members, setMembers] = useState(memberSeed);
+  const [accounts, setAccounts] = useState<AccountAccess[]>([]);
   const [checkinSaved, setCheckinSaved] = useState(false);
   const [adminNotice, setAdminNotice] = useState('');
   const [reminders, setReminders] = useState({ dayBefore: true, twoHours: true, changes: true });
@@ -331,6 +334,7 @@ export default function Home() {
     setDeclineReasons(data.declineReasons);
     setAbsences(data.absences);
     setMembers(data.members);
+    setAccounts(data.accounts);
     setPollChoice(data.pollChoice);
     setPollConfirmed(data.pollConfirmed);
     setReminders(data.reminders);
@@ -495,6 +499,15 @@ export default function Home() {
       setAdminNotice(`Konto für ${payload.name} wurde angelegt.`);
     } catch (error) {
       setAdminNotice(error instanceof Error ? error.message : 'Konto konnte nicht angelegt werden.');
+    }
+  };
+
+  const resetAccountPassword = async (account: AccountAccess) => {
+    try {
+      await mutate({ action: 'account.resetPassword', userId: account.userId }, true);
+      setAdminNotice(`Neues Startpasswort für ${account.name} wurde erstellt.`);
+    } catch (error) {
+      setAdminNotice(error instanceof Error ? error.message : 'Startpasswort konnte nicht erstellt werden.');
     }
   };
 
@@ -667,6 +680,9 @@ export default function Home() {
               remindOpenResponses={remindOpenResponses}
               absenceCount={absences.length}
               openMember={() => setMemberOpen(true)}
+              accounts={accounts}
+              currentUserId={appUser.userId}
+              resetAccountPassword={(account) => void resetAccountPassword(account)}
             />
           )}
           {view === 'checkin' && (
@@ -748,8 +764,36 @@ export default function Home() {
           </form>
         </DialogContent>
       </Dialog>
+      <PasswordChangeDialog open={appUser.mustChangePassword} onChanged={() => void refresh()} />
     </div>
   );
+}
+
+function PasswordChangeDialog({ open, onChanged }: { open: boolean; onChanged: () => void }) {
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async (event: React.SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    const form = new FormData(event.currentTarget);
+    const password = formString(form, 'password');
+    if (password !== formString(form, 'confirmation')) {
+      setError('Die beiden Passwörter stimmen nicht überein.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch('/api/auth/password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password }) });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? 'Passwort konnte nicht geändert werden.');
+      onChanged();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Passwort konnte nicht geändert werden.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <Dialog open={open}><DialogContent showCloseButton={false} className="border border-primary bg-popover sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><KeyRound className="size-5 text-primary" /> Eigenes Passwort festlegen</DialogTitle><DialogDescription>Das Startpasswort war für die Administration sichtbar. Lege jetzt ein persönliches Passwort fest; danach kann es niemand mehr auslesen.</DialogDescription></DialogHeader><form onSubmit={submit} className="grid gap-4"><label htmlFor="new-password" className="grid gap-2 text-xs font-medium">Neues Passwort<Input id="new-password" name="password" type="password" autoComplete="new-password" required minLength={12} className="h-11" /></label><label htmlFor="new-password-confirmation" className="grid gap-2 text-xs font-medium">Passwort wiederholen<Input id="new-password-confirmation" name="confirmation" type="password" autoComplete="new-password" required minLength={12} className="h-11" /></label>{error && <div role="alert" className="border border-red-600/20 bg-red-50 p-3 text-xs text-red-800">{error}</div>}<DialogFooter><Button disabled={busy} type="submit" className="h-11 bg-primary text-white hover:bg-primary/85 disabled:opacity-60"><ShieldCheck /> {busy ? 'Wird gespeichert …' : 'Persönliches Passwort speichern'}</Button></DialogFooter></form></DialogContent></Dialog>;
 }
 
 function AppLoading() {
@@ -1053,12 +1097,12 @@ function GroupBar({ label, value, people }: { label: string; value: number; peop
   return <div><div className="mb-2 flex items-end justify-between gap-3"><div><p className="text-sm font-bold">{label}</p><p className="mt-1 text-[10px] text-muted-foreground">{people}</p></div><span className="font-mono text-sm font-bold text-primary">{value}%</span></div><div className="h-1.5 bg-muted"><div className="h-full bg-primary" style={{ width: `${value}%` }} /></div></div>;
 }
 
-function AdminView({ notice, pollConfirmed, confirmPoll, openCreate, openMember, navigate, customEvents, removeCustomEvent, resetDemo, automations, setAutomations, groupVisibility, setGroupVisibility, remindOpenResponses, absenceCount }: { notice: string; pollConfirmed: boolean; confirmPoll: () => void; openCreate: () => void; openMember: () => void; navigate: (view: View) => void; customEvents: EventItem[]; removeCustomEvent: (id: string) => void; resetDemo: () => void; automations: { weekly: boolean; noResponse: boolean; parents: boolean }; setAutomations: React.Dispatch<React.SetStateAction<{ weekly: boolean; noResponse: boolean; parents: boolean }>>; groupVisibility: { techOnly: boolean; costumeOnly: boolean }; setGroupVisibility: React.Dispatch<React.SetStateAction<{ techOnly: boolean; costumeOnly: boolean }>>; remindOpenResponses: () => void; absenceCount: number }) {
+function AdminView({ notice, pollConfirmed, confirmPoll, openCreate, openMember, navigate, customEvents, removeCustomEvent, resetDemo, automations, setAutomations, groupVisibility, setGroupVisibility, remindOpenResponses, absenceCount, accounts, currentUserId, resetAccountPassword }: { notice: string; pollConfirmed: boolean; confirmPoll: () => void; openCreate: () => void; openMember: () => void; navigate: (view: View) => void; customEvents: EventItem[]; removeCustomEvent: (id: string) => void; resetDemo: () => void; automations: { weekly: boolean; noResponse: boolean; parents: boolean }; setAutomations: React.Dispatch<React.SetStateAction<{ weekly: boolean; noResponse: boolean; parents: boolean }>>; groupVisibility: { techOnly: boolean; costumeOnly: boolean }; setGroupVisibility: React.Dispatch<React.SetStateAction<{ techOnly: boolean; costumeOnly: boolean }>>; remindOpenResponses: () => void; absenceCount: number; accounts: AccountAccess[]; currentUserId: string; resetAccountPassword: (account: AccountAccess) => void }) {
   return (
     <>
       <SectionHeading kicker="Organisation" title="Adminbereich" action={<div className="flex flex-wrap gap-2"><Button onClick={openMember} variant="outline" className="h-10 border-border bg-card"><UserCheck /> Mitglied anlegen</Button><Button onClick={openCreate} className="h-10 rounded-sm bg-primary px-4 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground hover:bg-primary/85"><Plus /> Termin anlegen</Button></div>} />
       {notice && <div className="mb-6 flex items-start gap-3 border border-emerald-600/25 bg-emerald-50 p-4 text-sm text-emerald-700" aria-live="polite"><Check className="mt-0.5 size-5 shrink-0" /><span>{notice}</span></div>}
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Mitglieder" value="55" hint="37 Erwachsene · 18 Kinder" icon={Users} /><MetricCard label="Probe Donnerstag" value="24" hint="6 Rückmeldungen offen" icon={CalendarCheck} accent /><MetricCard label="Abwesenheiten" value={String(absenceCount + 3)} hint={`${absenceCount} von Logge gemeldet`} icon={Clock3} /><MetricCard label="Erinnerungen" value="96%" hint="Erfolgreich zugestellt" icon={BellRing} /></div>
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Konten" value={String(accounts.length)} hint={`${accounts.filter((account) => account.role === 'admin').length} Administratoren`} icon={Users} /><MetricCard label="Probe Donnerstag" value="24" hint="6 Rückmeldungen offen" icon={CalendarCheck} accent /><MetricCard label="Abwesenheiten" value={String(absenceCount + 3)} hint={`${absenceCount} von Logge gemeldet`} icon={Clock3} /><MetricCard label="Erinnerungen" value="96%" hint="Erfolgreich zugestellt" icon={BellRing} /></div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <section className="border border-border bg-card p-5 sm:p-6"><div className="flex items-start justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[0.28em] text-primary">Entscheidung nötig</p><h3 className="mt-2 text-lg font-black uppercase">Terminabstimmung</h3></div><Vote className="size-5 text-primary" /></div><div className="mt-6 border border-border bg-background p-4"><div className="flex items-center justify-between gap-3"><div><p className="font-bold">Zusatzprobe · Maskenball</p><p className="mt-1 text-xs text-muted-foreground">39 Stimmen · klare Mehrheit</p></div><StatusPill tone={pollConfirmed ? 'success' : 'warning'}>{pollConfirmed ? 'Bestätigt' : 'Offen'}</StatusPill></div><div className="mt-4 flex items-center gap-3 border-l-2 border-primary pl-4"><div className="flex-1"><p className="font-mono text-[9px] uppercase tracking-wider text-primary">Gewinner · 19 Stimmen</p><p className="mt-1 text-sm font-bold">Samstag, 19. September · 14:00</p></div></div></div>{pollConfirmed ? <div className="mt-4 flex items-center gap-2 text-sm text-emerald-700"><Check className="size-4" />Im Kalender veröffentlicht</div> : <Button onClick={confirmPoll} className="mt-4 h-10 w-full rounded-sm bg-primary text-primary-foreground hover:bg-primary/85"><Check /> Termin bestätigen & eintragen</Button>}</section>
@@ -1067,14 +1111,15 @@ function AdminView({ notice, pollConfirmed, confirmPoll, openCreate, openMember,
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]"><section className="border border-border bg-card"><div className="flex items-center justify-between border-b border-border p-5"><div><p className="font-mono text-[9px] uppercase tracking-[0.28em] text-primary">Mitglieder & Gruppen</p><h3 className="mt-2 font-black uppercase">Offene Rückmeldungen</h3></div><Button onClick={remindOpenResponses} variant="outline" size="sm" className="rounded-sm border-amber-600/30 bg-amber-50 text-amber-800"><Send /> Alle erinnern</Button></div><div className="divide-y divide-border">{memberSeed.slice(2, 6).map((member) => <div key={member.id} className="flex items-center gap-3 p-4"><div className="grid size-9 place-items-center rounded-full bg-muted text-[10px] font-bold">{member.initials}</div><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{member.name}</p><p className="mt-0.5 text-[10px] text-muted-foreground">{member.group}</p></div><StatusPill tone="warning">Rückmeldung offen</StatusPill></div>)}</div></section><section className="border border-border bg-card p-5"><Settings2 className="size-5 text-primary" /><h3 className="mt-4 font-black uppercase">Automationen & Konto</h3><div className="mt-5 space-y-4"><ReminderRow label="Wöchentliche Probe" checked={automations.weekly} onChange={(weekly) => setAutomations((values) => ({ ...values, weekly }))} /><ReminderRow label="Erinnerung bei Nichtreaktion" checked={automations.noResponse} onChange={(noResponse) => setAutomations((values) => ({ ...values, noResponse }))} /><ReminderRow label="Elternkontakt bei Kindern" checked={automations.parents} onChange={(parents) => setAutomations((values) => ({ ...values, parents }))} /></div><p className="mt-5 border-t border-border pt-4 text-[10px] leading-relaxed text-muted-foreground">Erinnerungen gehen nur an Mitglieder, Erziehungsberechtigte oder Gruppen, die für den Termin getaggt sind.</p>{customEvents.length > 0 && <div className="mt-4 space-y-2">{customEvents.map((event) => <div key={event.id} className="flex items-center gap-2 border border-primary/20 bg-primary/5 p-3 text-xs text-primary"><span className="min-w-0 flex-1 truncate">{event.day}. {event.month} · {event.title}</span><button type="button" aria-label={`${event.title} löschen`} onClick={() => removeCustomEvent(event.id)} className="grid size-7 shrink-0 place-items-center border border-primary/20 bg-white hover:bg-primary/10"><X className="size-3" /></button></div>)}</div>}<Button type="button" variant="outline" onClick={resetDemo} className="mt-5 h-10 w-full rounded-sm border-border bg-white text-muted-foreground hover:border-red-500 hover:text-red-700"><RotateCcw /> Abmelden</Button><p className="mt-2 text-center text-[9px] text-muted-foreground">Alle Vereinsdaten bleiben auf dem Server erhalten.</p></section></div>
-      <section className="mt-6 border border-border bg-card p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-mono text-[9px] uppercase tracking-[0.28em] text-primary">Berechtigungen</p><h3 className="mt-2 text-lg font-black uppercase">Mehrere Adminrollen & Gruppensichtbarkeit</h3></div><UserCog className="size-5 text-primary" /></div><div className="mt-5 grid gap-3 md:grid-cols-3"><AdminRole name="Sebastian" roleLabel="Probenleitung" scope="Alle Termine & Mitglieder" /><AdminRole name="Yunus" roleLabel="Spielbetrieb" scope="Ensemble & Szenenplanung" /><AdminRole name="Technik-Admin" roleLabel="Technikleitung" scope="Nur Techniktermine" /></div><div className="mt-5 grid gap-4 border-t border-border pt-5 sm:grid-cols-2"><ReminderRow label="Techniktermine nur für Technik sichtbar" checked={groupVisibility.techOnly} onChange={(techOnly) => setGroupVisibility((values) => ({ ...values, techOnly }))} /><ReminderRow label="Kostümtermine nur für Kostümteam" checked={groupVisibility.costumeOnly} onChange={(costumeOnly) => setGroupVisibility((values) => ({ ...values, costumeOnly }))} /></div></section>
+      <section className="mt-6 border border-border bg-card p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-mono text-[9px] uppercase tracking-[0.28em] text-primary">Zugangsverwaltung</p><h3 className="mt-2 text-lg font-black uppercase">Konten & Startpasswörter</h3><p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">Startpasswörter sind sichtbar, bis das Mitglied ein persönliches Passwort festlegt. Persönliche Passwörter werden ausschließlich als Hash gespeichert und können nicht ausgelesen werden.</p></div><KeyRound className="size-5 text-primary" /></div>
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {accounts.map((account) => <article key={account.userId} className="border border-border bg-background p-4"><div className="flex items-start gap-3"><div className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{account.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-bold">{account.name}</p><StatusPill tone={account.role === 'admin' ? 'success' : 'neutral'}>{account.role === 'admin' ? 'Admin' : 'Mitglied'}</StatusPill></div><p className="mt-1 truncate text-[10px] text-muted-foreground">{account.email} · {account.group || 'Keine Gruppe'}</p></div></div><div className="mt-4 border border-border bg-card p-3"><p className="font-mono text-[8px] uppercase tracking-[0.18em] text-muted-foreground">{account.temporaryPassword ? 'Aktuelles Startpasswort' : 'Passwortstatus'}</p>{account.temporaryPassword ? <code className="mt-2 block break-all text-sm font-bold text-primary">{account.temporaryPassword}</code> : <p className="mt-2 flex items-center gap-2 text-xs font-medium text-emerald-700"><LockKeyhole className="size-3.5" /> Persönliches Passwort gesetzt</p>}</div><Button type="button" disabled={account.userId === currentUserId} onClick={() => resetAccountPassword(account)} variant="outline" className="mt-3 h-9 w-full rounded-sm border-border bg-white text-xs disabled:opacity-45"><RotateCcw /> {account.temporaryPassword ? 'Neues Startpasswort' : 'Startpasswort zurücksetzen'}</Button></article>)}
+        </div>
+        <div className="mt-6 grid gap-4 border-t border-border pt-5 sm:grid-cols-2"><ReminderRow label="Techniktermine nur für Technik sichtbar" checked={groupVisibility.techOnly} onChange={(techOnly) => setGroupVisibility((values) => ({ ...values, techOnly }))} /><ReminderRow label="Kostümtermine nur für Kostümteam" checked={groupVisibility.costumeOnly} onChange={(costumeOnly) => setGroupVisibility((values) => ({ ...values, costumeOnly }))} /></div>
+      </section>
     </>
   );
-}
-
-function AdminRole({ name, roleLabel, scope }: { name: string; roleLabel: string; scope: string }) {
-  const initials = name.split(' ').map((part) => part[0]).join('').slice(0, 2);
-  return <div className="flex items-center gap-3 border border-border bg-background p-3"><div className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initials}</div><div className="min-w-0"><p className="truncate text-sm font-bold">{name}</p><p className="mt-0.5 text-[10px] text-primary">{roleLabel}</p><p className="mt-1 text-[9px] text-muted-foreground">{scope}</p></div></div>;
 }
 
 function CheckinView({ members, setMembers, saved, setSaved, saveCheckin, presentCount, navigate }: { members: typeof memberSeed; setMembers: React.Dispatch<React.SetStateAction<typeof memberSeed>>; saved: boolean; setSaved: (value: boolean) => void; saveCheckin: () => void; presentCount: number; navigate: (view: View) => void }) {

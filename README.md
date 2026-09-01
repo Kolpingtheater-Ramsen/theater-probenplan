@@ -7,6 +7,9 @@ Produktive Probenplan-App für Termine, Rückmeldungen, Abwesenheiten, Abstimmun
 - geschützter Mitgliederbereich mit Passwort-Login und 30-Tage-Sitzungen
 - einmalige Ersteinrichtung des ersten Admin-Kontos
 - Rollen für Mitglieder und Administratoren
+- automatische Seed-Konten für das Beispiel-Ensemble und drei Administratoren
+- Admin-Zugangsverwaltung mit sichtbaren Startpasswörtern und sicherem Passwort-Reset
+- verpflichtender Wechsel vom Startpasswort zu einem nicht auslesbaren persönlichen Passwort
 - gemeinsame SQLite-Datenbank statt Browser-/Demo-Speicher
 - Zu- und Absagen inklusive Absagegrund und Fristen
 - längere Abwesenheiten
@@ -25,6 +28,8 @@ npm run dev
 ```
 
 Beim ersten Aufruf wird das erste Admin-Konto angelegt. Lokale Daten liegen standardmäßig unter `.data/theater.db`.
+
+Nach der Ersteinrichtung werden die übrigen Seed-Konten automatisch erzeugt. Ihre Startpasswörter sind im Adminbereich sichtbar. Sobald ein Mitglied ein persönliches Passwort festlegt, wird das Startpasswort entfernt; das persönliche Passwort wird nur gehasht gespeichert und kann auch von Administratoren nicht ausgelesen werden.
 
 ## Dokploy
 
