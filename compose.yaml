@@ -1,0 +1,20 @@
+services:
+  buehnenplan:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_PATH: /data/theater.db
+    ports:
+      - "3000:3000"
+    volumes:
+      - buehnenplan-data:/data
+    healthcheck:
+      test: ["CMD", "node", "scripts/healthcheck.mjs"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  buehnenplan-data:

@@ -1,29 +1,47 @@
-# Bühnenplan – Theater-Probenplan
+# Bühnenplan – Kolpingtheater Ramsen
 
-Klickbarer Web-App-Prototyp für die Organisation eines Theatervereins. Das visuelle Konzept orientiert sich an der dunklen Bühnenästhetik und dem Kolping-Orange des Kolpingtheaters Ramsen.
+Produktive Probenplan-App für Termine, Rückmeldungen, Abwesenheiten, Abstimmungen und Anwesenheits-Check-ins.
 
-## Enthaltene Abläufe
+## Funktionen
 
-- persönliche Übersicht mit nächster Probe und Anwesenheitsserie
-- automatische Zusage sowie Absage mit dargestellten Fristen
-- Vereinskalender für alle, Gruppen und einzelne Mitglieder
-- längere Abwesenheitsmeldung
-- Terminabstimmung mit anschließender Admin-Bestätigung
-- Adminbereich für Termine, Gruppen und Erinnerungen
-- Check-in der tatsächlich anwesenden Mitglieder durch die Probenleitung
-- persönliche und vereinsweite Statistiken
-- Export für Apple Kalender und Outlook sowie Übergabe an Google Kalender
-- responsive Desktop- und Mobilnavigation
-
-## Hinweis
-
-Dies ist ein Frontend-Prototyp mit Beispieldaten. Anmeldung, echte Benachrichtigungen, dauerhafte Datenspeicherung, Rechteverwaltung und produktive Kalender-Synchronisation sind noch nicht angebunden.
+- geschützter Mitgliederbereich mit Passwort-Login und 30-Tage-Sitzungen
+- einmalige Ersteinrichtung des ersten Admin-Kontos
+- Rollen für Mitglieder und Administratoren
+- gemeinsame SQLite-Datenbank statt Browser-/Demo-Speicher
+- Zu- und Absagen inklusive Absagegrund und Fristen
+- längere Abwesenheiten
+- Terminabstimmungen mit Admin-Bestätigung
+- Admin-Termine, Gruppen, Erinnerungen und Mitgliederkonten
+- Live-Check-in der Probenleitung
+- Kalenderexport für Apple Kalender, Outlook und Google Kalender
+- Healthcheck unter `/api/healthz/`
+- responsives Layout für Desktop und Mobilgeräte
 
 ## Lokal starten
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-Der statische Produktionsstand entsteht mit `npm run build` in `dist/client`.
+Beim ersten Aufruf wird das erste Admin-Konto angelegt. Lokale Daten liegen standardmäßig unter `.data/theater.db`.
+
+## Dokploy
+
+Das Repository enthält einen produktionsfertigen `Dockerfile` und `compose.yaml`.
+
+- interner Port: `3000`
+- Healthcheck: `/api/healthz/`
+- persistentes Volume: `/data`
+- Datenbank im Container: `/data/theater.db`
+
+Für eine Dokploy-Compose-Anwendung reicht die committed `compose.yaml`; das benannte Volume `buehnenplan-data` hält die Daten auch über Deployments und Neustarts hinweg.
+
+## Prüfungen
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+docker build -t theater-probenplan .
+```
