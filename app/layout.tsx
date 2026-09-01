@@ -17,21 +17,25 @@ const assetPrefix =
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://loggel.github.io/'),
-  title: 'Bühnenplan | Kolpingtheater Ramsen',
+  title: 'Creepshow Probenplan | Kolpingtheater Ramsen',
   description:
-    'Klickprototyp für Proben, Termine, Anwesenheit und Organisation im Theaterverein.',
+    'Klickprototyp für Proben, Termine und Anwesenheit rund um die Creepshow des Kolpingtheaters Ramsen.',
+  icons: {
+    icon: `${assetPrefix}/theater-logo.png`,
+    apple: `${assetPrefix}/theater-logo.png`,
+  },
   openGraph: {
-    title: 'Bühnenplan | Kolpingtheater Ramsen',
+    title: 'Creepshow Probenplan | Kolpingtheater Ramsen',
     description:
-      'Klickprototyp für Proben, Termine, Anwesenheit und Organisation im Theaterverein.',
+      'Proben, Termine und Anwesenheit für die Creepshow des Kolpingtheaters Ramsen.',
     type: 'website',
     images: [`${assetPrefix}/og.webp`],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Bühnenplan | Kolpingtheater Ramsen',
+    title: 'Creepshow Probenplan | Kolpingtheater Ramsen',
     description:
-      'Klickprototyp für Proben, Termine, Anwesenheit und Organisation im Theaterverein.',
+      'Proben, Termine und Anwesenheit für die Creepshow des Kolpingtheaters Ramsen.',
     images: [`${assetPrefix}/og.webp`],
   },
 };

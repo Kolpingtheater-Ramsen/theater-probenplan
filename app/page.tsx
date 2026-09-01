@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Image from 'next/image';
 import {
   BarChart as RechartsBarChart,
   Bar,
@@ -80,10 +81,10 @@ const baseEvents: EventItem[] = [
     day: 3,
     month: 'SEP',
     weekday: 'Donnerstag',
-    title: 'Wochenprobe „Schicksalsfäden“',
+    title: 'Wochenprobe „Creepshow“',
     time: '19:00–21:00',
     place: 'Kolpingheim · Großer Saal',
-    group: 'Jugend & Ensemble',
+    group: 'Creepshow-Ensemble',
     people: 24,
     type: 'weekly',
     tone: 'orange',
@@ -93,7 +94,7 @@ const baseEvents: EventItem[] = [
     day: 7,
     month: 'SEP',
     weekday: 'Montag',
-    title: 'Szenenprobe · Akt II',
+    title: 'Szenenprobe · Villa Falkenstein',
     time: '18:30–20:30',
     place: 'Kolpingheim · Kleiner Saal',
     group: 'Ensemble',
@@ -106,7 +107,7 @@ const baseEvents: EventItem[] = [
     day: 12,
     month: 'SEP',
     weekday: 'Samstag',
-    title: 'Kostüm & Maske',
+    title: 'Maskenball · Kostüm & Maske',
     time: '10:00–13:00',
     place: 'Fundus',
     group: 'Kostümteam',
@@ -119,7 +120,7 @@ const baseEvents: EventItem[] = [
     day: 16,
     month: 'SEP',
     weekday: 'Mittwoch',
-    title: 'Technikdurchlauf',
+    title: 'Technikdurchlauf · Open-Air-Bühne',
     time: '18:00–21:00',
     place: 'Bühne',
     group: 'Technik & Ensemble',
@@ -133,7 +134,7 @@ const baseEvents: EventItem[] = [
     day: 24,
     month: 'SEP',
     weekday: 'Donnerstag',
-    title: 'Wochenprobe · Gesamtbild',
+    title: 'Wochenprobe · Creepshow-Finale',
     time: '19:00–21:00',
     place: 'Kolpingheim · Großer Saal',
     group: 'Alle',
@@ -144,7 +145,7 @@ const baseEvents: EventItem[] = [
 ];
 
 const memberSeed = [
-  { id: 1, name: 'Lena Müller', group: 'Jugend', initials: 'LM', present: true },
+  { id: 1, name: 'Logge', group: 'Ensemble · Bote / Diener', initials: 'LO', present: true },
   { id: 2, name: 'Noah Becker', group: 'Jugend', initials: 'NB', present: true },
   { id: 3, name: 'Mia Wagner', group: 'Jugend', initials: 'MW', present: false },
   { id: 4, name: 'Jonas Hoffmann', group: 'Ensemble', initials: 'JH', present: true },
@@ -245,7 +246,7 @@ export default function Home() {
         day: 19,
         month: 'SEP',
         weekday: 'Samstag',
-        title: 'Zusatzprobe · Akt III',
+        title: 'Zusatzprobe · Maskenball',
         time: '14:00–17:00',
         place: 'Kolpingheim · Großer Saal',
         group: 'Alle Getaggten',
@@ -348,7 +349,7 @@ export default function Home() {
     <div className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-sidebar lg:flex">
         <div className="flex h-20 items-center border-b border-border px-7">
-          <div className="brand-corner mr-3 h-8 w-8" aria-hidden />
+          <Image src="theater-logo.png" alt="" aria-hidden="true" width={40} height={40} priority unoptimized className="mr-3 size-10 object-contain" />
           <div>
             <p className="font-black uppercase leading-none tracking-[-0.03em]">Kolping</p>
             <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.28em] text-primary">Theater Ramsen</p>
@@ -380,8 +381,8 @@ export default function Home() {
 
         <div className="border-t border-border p-4">
           <button type="button" onClick={() => navigate('dashboard')} className="flex w-full items-center gap-3 rounded-sm bg-muted/50 p-3 text-left hover:bg-muted">
-            <div className="grid size-9 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">LM</div>
-            <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">Lena Müller</p><p className="truncate text-xs text-muted-foreground">Jugendensemble</p></div>
+            <div className="grid size-9 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">LO</div>
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">Logge</p><p className="truncate text-xs text-muted-foreground">Bote / Diener</p></div>
             <ChevronRight className="size-4 text-muted-foreground" />
           </button>
         </div>
@@ -390,19 +391,19 @@ export default function Home() {
       <main className="min-h-screen pb-24 lg:ml-64 lg:pb-10">
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-background/90 px-5 backdrop-blur-xl sm:px-8 lg:h-20 lg:px-10">
           <button type="button" onClick={() => navigate('dashboard')} className="flex items-center gap-3 lg:hidden">
-            <div className="brand-corner h-7 w-7" aria-hidden />
+            <Image src="theater-logo.png" alt="" aria-hidden="true" width={36} height={36} priority unoptimized className="size-9 object-contain" />
             <span className="font-black uppercase tracking-tight">Kolping Theater</span>
           </button>
           <div className="hidden lg:block">
             <p className="font-mono text-[9px] uppercase tracking-[0.32em] text-primary">Dienstag · 01. September 2026</p>
-            <h1 className="mt-1 text-xl font-black tracking-tight">{view === 'dashboard' ? 'Hallo Lena' : navItems.find((item) => item.view === view)?.label ?? (view === 'admin' ? 'Adminbereich' : 'Proben-Check-in')}</h1>
+            <h1 className="mt-1 text-xl font-black tracking-tight">{view === 'dashboard' ? 'Hallo Logge' : navItems.find((item) => item.view === view)?.label ?? (view === 'admin' ? 'Adminbereich' : 'Proben-Check-in')}</h1>
           </div>
           <div className="flex items-center gap-2">
             <span className="mr-2 hidden rounded-full border border-primary/30 bg-primary/10 px-3 py-1 font-mono text-[8px] uppercase tracking-[0.18em] text-primary sm:inline-flex">Klickprototyp · Beispieldaten</span>
             <button type="button" aria-label="Benachrichtigungen" className="relative grid size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary hover:text-primary">
               <Bell className="size-4" /><span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" />
             </button>
-            <div className="grid size-10 place-items-center rounded-full bg-primary text-xs font-black text-primary-foreground lg:hidden">LM</div>
+            <div className="grid size-10 place-items-center rounded-full bg-primary text-xs font-black text-primary-foreground lg:hidden">LO</div>
           </div>
         </header>
 
@@ -491,7 +492,7 @@ export default function Home() {
             <DialogDescription>Der Termin wird für die gewählte Gruppe eingetragen und automatisch angekündigt.</DialogDescription>
           </DialogHeader>
           <form action={createEvent} className="grid gap-4">
-            <label htmlFor="event-title" className="grid gap-2 text-xs font-medium">Titel<Input id="event-title" name="title" required defaultValue="Leseprobe · Finale" className="h-11 rounded-sm" /></label>
+            <label htmlFor="event-title" className="grid gap-2 text-xs font-medium">Titel<Input id="event-title" name="title" required defaultValue="Leseprobe · Creepshow-Finale" className="h-11 rounded-sm" /></label>
             <div className="grid grid-cols-2 gap-3"><label htmlFor="event-date" className="grid gap-2 text-xs font-medium">Datum<Input id="event-date" name="date" required type="date" defaultValue="2026-09-27" className="h-11 rounded-sm" /></label><label htmlFor="event-time" className="grid gap-2 text-xs font-medium">Beginn<Input id="event-time" name="time" required type="time" defaultValue="15:00" className="h-11 rounded-sm" /></label></div>
             <label htmlFor="event-group" className="grid gap-2 text-xs font-medium">Sichtbar für<select id="event-group" name="group" defaultValue="Alle" className="h-11 rounded-sm border border-input bg-background px-3 text-sm outline-none focus:border-primary"><option>Alle</option><option>Jugendensemble</option><option>Erwachsenen-Ensemble</option><option>Technik</option><option>Kostümteam</option></select></label>
             <label htmlFor="event-note" className="grid gap-2 text-xs font-medium">Hinweis<Textarea id="event-note" placeholder="Was sollen die Mitglieder mitbringen?" className="min-h-20 rounded-sm" /></label>
@@ -519,19 +520,19 @@ function DashboardView({ attendance, notice, setResponse, events, openEvent, ope
   const next = events[0];
   return (
     <>
-      <section className="mb-7 lg:hidden"><p className="font-mono text-[9px] uppercase tracking-[0.32em] text-primary">Deine Übersicht</p><h1 className="mt-2 text-2xl font-black uppercase tracking-tight">Hallo Lena.</h1></section>
+      <section className="mb-7 lg:hidden"><p className="font-mono text-[9px] uppercase tracking-[0.32em] text-primary">Deine Übersicht</p><h1 className="mt-2 text-2xl font-black uppercase tracking-tight">Hallo Logge.</h1></section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.85fr)]">
         <section className="stage-card relative overflow-hidden border border-border bg-card p-5 shadow-2xl shadow-black/15 sm:p-7" aria-labelledby="next-rehearsal">
           <div className="absolute inset-x-0 top-0 h-1 bg-primary" />
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2"><span className="size-2 animate-pulse rounded-full bg-primary" /><p className="font-mono text-[10px] font-bold uppercase tracking-[0.28em] text-primary">Nächste Probe · in 2 Tagen</p></div>
-            <StatusPill>Jugend & Ensemble</StatusPill>
+            <StatusPill>Creepshow-Ensemble</StatusPill>
           </div>
           <div className="grid gap-6 sm:grid-cols-[112px_1fr] sm:items-center">
             <div className="date-ticket flex h-28 w-full flex-col items-center justify-center border border-border bg-background sm:w-28"><span className="font-mono text-[10px] font-bold tracking-[0.28em] text-primary">DO · SEP</span><span className="mt-1 text-5xl font-black leading-none tracking-[-0.08em]">03</span></div>
             <div>
-              <h2 id="next-rehearsal" className="text-3xl font-black leading-tight tracking-[-0.04em] sm:text-4xl">Wochenprobe<span className="mt-1 block text-primary">„Schicksalsfäden“</span></h2>
+              <h2 id="next-rehearsal" className="text-3xl font-black leading-tight tracking-[-0.04em] sm:text-4xl">Wochenprobe<span className="mt-1 block text-primary">„Creepshow“</span></h2>
               <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground"><span className="inline-flex items-center gap-2"><Clock3 className="size-4 text-primary" />19:00–21:00</span><span className="inline-flex items-center gap-2"><MapPin className="size-4 text-primary" />Großer Saal</span></div>
             </div>
           </div>
@@ -646,7 +647,7 @@ function PollsView({ choice, setChoice, confirmed, navigate }: { choice: string;
       <SectionHeading kicker="Gemeinsam planen" title="Terminabstimmungen" />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)]">
         <section className="border border-border bg-card p-5 sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><StatusPill tone={confirmed ? 'success' : 'warning'}>{confirmed ? 'Bestätigt' : 'Offen bis 10. September'}</StatusPill><h3 className="mt-5 text-2xl font-black uppercase tracking-tight">Zusatzprobe · Akt III</h3><p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">Welche Zeit passt den 27 getaggten Mitgliedern am besten? Du kannst eine Option wählen.</p></div><Vote className="size-7 text-primary" /></div>
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><StatusPill tone={confirmed ? 'success' : 'warning'}>{confirmed ? 'Bestätigt' : 'Offen bis 10. September'}</StatusPill><h3 className="mt-5 text-2xl font-black uppercase tracking-tight">Zusatzprobe · Maskenball</h3><p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">Welche Zeit passt den 27 getaggten Mitgliedern am besten? Du kannst eine Option wählen.</p></div><Vote className="size-7 text-primary" /></div>
           <div className="mt-7 space-y-3">
             {pollOptions.map((option) => {
               const selected = choice === option.id;
@@ -719,7 +720,7 @@ function AdminView({ notice, pollConfirmed, confirmPoll, openCreate, navigate, c
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Mitglieder" value="55" hint="37 Erwachsene · 18 Kinder" icon={Users} /><MetricCard label="Probe Donnerstag" value="24" hint="6 Rückmeldungen offen" icon={CalendarCheck} accent /><MetricCard label="Abwesenheiten" value="3" hint="Für September gemeldet" icon={Clock3} /><MetricCard label="Erinnerungen" value="96%" hint="Erfolgreich zugestellt" icon={BellRing} /></div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <section className="border border-border bg-card p-5 sm:p-6"><div className="flex items-start justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[0.28em] text-primary">Entscheidung nötig</p><h3 className="mt-2 text-lg font-black uppercase">Terminabstimmung</h3></div><Vote className="size-5 text-primary" /></div><div className="mt-6 border border-border bg-background p-4"><div className="flex items-center justify-between gap-3"><div><p className="font-bold">Zusatzprobe · Akt III</p><p className="mt-1 text-xs text-muted-foreground">39 Stimmen · klare Mehrheit</p></div><StatusPill tone={pollConfirmed ? 'success' : 'warning'}>{pollConfirmed ? 'Bestätigt' : 'Offen'}</StatusPill></div><div className="mt-4 flex items-center gap-3 border-l-2 border-primary pl-4"><div className="flex-1"><p className="font-mono text-[9px] uppercase tracking-wider text-primary">Gewinner · 19 Stimmen</p><p className="mt-1 text-sm font-bold">Samstag, 19. September · 14:00</p></div></div></div>{pollConfirmed ? <div className="mt-4 flex items-center gap-2 text-sm text-emerald-700"><Check className="size-4" />Im Kalender veröffentlicht</div> : <Button onClick={confirmPoll} className="mt-4 h-10 w-full rounded-sm bg-primary text-primary-foreground hover:bg-primary/85"><Check /> Termin bestätigen & eintragen</Button>}</section>
+        <section className="border border-border bg-card p-5 sm:p-6"><div className="flex items-start justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[0.28em] text-primary">Entscheidung nötig</p><h3 className="mt-2 text-lg font-black uppercase">Terminabstimmung</h3></div><Vote className="size-5 text-primary" /></div><div className="mt-6 border border-border bg-background p-4"><div className="flex items-center justify-between gap-3"><div><p className="font-bold">Zusatzprobe · Maskenball</p><p className="mt-1 text-xs text-muted-foreground">39 Stimmen · klare Mehrheit</p></div><StatusPill tone={pollConfirmed ? 'success' : 'warning'}>{pollConfirmed ? 'Bestätigt' : 'Offen'}</StatusPill></div><div className="mt-4 flex items-center gap-3 border-l-2 border-primary pl-4"><div className="flex-1"><p className="font-mono text-[9px] uppercase tracking-wider text-primary">Gewinner · 19 Stimmen</p><p className="mt-1 text-sm font-bold">Samstag, 19. September · 14:00</p></div></div></div>{pollConfirmed ? <div className="mt-4 flex items-center gap-2 text-sm text-emerald-700"><Check className="size-4" />Im Kalender veröffentlicht</div> : <Button onClick={confirmPoll} className="mt-4 h-10 w-full rounded-sm bg-primary text-primary-foreground hover:bg-primary/85"><Check /> Termin bestätigen & eintragen</Button>}</section>
 
         <section className="border border-border bg-card p-5 sm:p-6"><div className="flex items-start justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-[0.28em] text-primary">Donnerstag · 03. September</p><h3 className="mt-2 text-lg font-black uppercase">Probenanwesenheit</h3></div><ClipboardCheck className="size-5 text-primary" /></div><div className="mt-6 grid grid-cols-3 gap-3 text-center"><div className="border border-border bg-background p-3"><p className="text-2xl font-black">24</p><p className="text-[9px] text-muted-foreground">Zugesagt</p></div><div className="border border-border bg-background p-3"><p className="text-2xl font-black">5</p><p className="text-[9px] text-muted-foreground">Abgesagt</p></div><div className="border border-amber-500/30 bg-amber-50 p-3"><p className="text-2xl font-black text-amber-700">6</p><p className="text-[9px] text-muted-foreground">Offen</p></div></div><Button onClick={() => navigate('checkin')} variant="outline" className="mt-4 h-10 w-full rounded-sm border-border bg-transparent hover:border-primary"><ClipboardCheck /> Anwesenheit abhaken</Button></section>
       </div>
@@ -735,7 +736,7 @@ function CheckinView({ members, setMembers, saved, setSaved, presentCount, navig
     <>
       <div className="mb-6 flex items-center gap-4"><button type="button" aria-label="Zurück zum Adminbereich" onClick={() => navigate('admin')} className="grid size-10 place-items-center border border-border bg-card text-muted-foreground hover:border-primary hover:text-primary"><ArrowLeft className="size-4" /></button><div><p className="font-mono text-[9px] uppercase tracking-[0.28em] text-primary">Probenleitung · Live</p><h2 className="mt-1 text-2xl font-black uppercase tracking-tight">Anwesenheit abhaken</h2></div></div>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)]">
-        <section className="border border-border bg-card"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><p className="font-bold">Wochenprobe „Schicksalsfäden“</p><p className="mt-1 text-xs text-muted-foreground">Donnerstag, 03. September · 19:00</p></div><StatusPill tone="success"><span className="mr-2 size-1.5 animate-pulse rounded-full bg-emerald-500" /> Probe läuft</StatusPill></div><div className="divide-y divide-border">{members.map((member) => <label key={member.id} className="flex cursor-pointer items-center gap-4 p-4 transition hover:bg-muted/40"><input type="checkbox" checked={member.present} onChange={(event) => toggleMember(member.id, event.target.checked)} className="size-5 accent-[#c94f1d]" /><div className="grid size-10 place-items-center rounded-full bg-muted text-[10px] font-bold">{member.initials}</div><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{member.name}</p><p className="mt-0.5 text-[10px] text-muted-foreground">{member.group}</p></div><span className={`text-xs font-medium ${member.present ? 'text-emerald-700' : 'text-muted-foreground'}`}>{member.present ? 'Anwesend' : 'Fehlt'}</span></label>)}</div></section>
+        <section className="border border-border bg-card"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><p className="font-bold">Wochenprobe „Creepshow“</p><p className="mt-1 text-xs text-muted-foreground">Donnerstag, 03. September · 19:00</p></div><StatusPill tone="success"><span className="mr-2 size-1.5 animate-pulse rounded-full bg-emerald-500" /> Probe läuft</StatusPill></div><div className="divide-y divide-border">{members.map((member) => <label key={member.id} className="flex cursor-pointer items-center gap-4 p-4 transition hover:bg-muted/40"><input type="checkbox" checked={member.present} onChange={(event) => toggleMember(member.id, event.target.checked)} className="size-5 accent-[#c94f1d]" /><div className="grid size-10 place-items-center rounded-full bg-muted text-[10px] font-bold">{member.initials}</div><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{member.name}</p><p className="mt-0.5 text-[10px] text-muted-foreground">{member.group}</p></div><span className={`text-xs font-medium ${member.present ? 'text-emerald-700' : 'text-muted-foreground'}`}>{member.present ? 'Anwesend' : 'Fehlt'}</span></label>)}</div></section>
         <aside className="space-y-4"><section className="border border-primary bg-primary p-6 text-primary-foreground"><p className="font-mono text-[9px] uppercase tracking-[0.25em] text-primary-foreground/70">Aktueller Stand</p><div className="mt-5 flex items-end gap-2"><span className="text-6xl font-black tracking-[-0.08em]">{presentCount}</span><span className="mb-2 text-lg font-bold">/ {members.length}</span></div><p className="mt-2 text-sm text-primary-foreground/70">tatsächlich anwesend</p><div className="mt-5 h-2 bg-white/20"><div className="h-full bg-white" style={{ width: `${(presentCount / members.length) * 100}%` }} /></div></section><div className="border border-border bg-card p-5"><p className="text-sm font-bold">Nach der Probe</p><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Gespeicherte Anwesenheit fließt in die persönliche und vereinsweite Statistik ein.</p><Button onClick={() => setSaved(true)} className="mt-5 h-11 w-full rounded-sm bg-primary text-primary-foreground hover:bg-primary/85"><Check /> Anwesenheit speichern</Button>{saved && <p className="mt-3 text-center text-xs text-emerald-700" aria-live="polite">Gespeichert · 20:54 Uhr</p>}</div><button type="button" onClick={() => { setMembers(memberSeed); setSaved(false); }} className="flex w-full items-center justify-center gap-2 p-3 text-xs text-muted-foreground hover:text-primary"><RotateCcw className="size-3" /> Beispielzustand zurücksetzen</button></aside>
       </div>
     </>
