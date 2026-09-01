@@ -5,8 +5,8 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_PATH: /data/theater.db
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     volumes:
       - buehnenplan-data:/data
     healthcheck:
