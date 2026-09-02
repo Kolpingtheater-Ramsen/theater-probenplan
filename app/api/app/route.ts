@@ -7,6 +7,10 @@ import {
   seedMemberAccounts,
 } from '@/lib/server/accounts';
 import { getDatabase, seedOrganization } from '@/lib/server/db';
+import {
+  eventsCoveredByAbsence,
+  isEventVisibleToMember,
+} from '@/lib/server/event-visibility.mjs';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +19,17 @@ const organizationDefault = {
   automations: { weekly: true, noResponse: true, parents: true },
   groupVisibility: { techOnly: true, costumeOnly: true },
 };
+
+function readOrganizationSettings(db: ReturnType<typeof getDatabase>) {
+  const row = db
+    .prepare(
+      'SELECT settings_json AS settingsJson FROM organization_settings WHERE id = 1',
+    )
+    .get() as { settingsJson: string } | undefined;
+  return row
+    ? (JSON.parse(row.settingsJson) as typeof organizationDefault)
+    : organizationDefault;
+}
 
 function unauthorized() {
   return NextResponse.json(
@@ -49,14 +64,7 @@ export function GET(request: NextRequest) {
   seedOrganization();
   if (user.role === 'admin') seedMemberAccounts();
   const db = getDatabase();
-  const orgSettings = db
-    .prepare(
-      'SELECT settings_json AS settingsJson FROM organization_settings WHERE id = 1',
-    )
-    .get() as { settingsJson: string } | undefined;
-  const organization = orgSettings
-    ? (JSON.parse(orgSettings.settingsJson) as typeof organizationDefault)
-    : organizationDefault;
+  const organization = readOrganizationSettings(db);
   const memberProfile = db
     .prepare(
       'SELECT id AS memberId, group_name AS groupName, avatar_url AS avatar FROM members WHERE lower(email) = lower(?)',
@@ -83,28 +91,13 @@ export function GET(request: NextRequest) {
   const events =
     user.role === 'admin'
       ? allEvents
-      : allEvents.filter((event) => {
-          const group = event.group.toLocaleLowerCase('de-DE');
-          const ownGroup =
-            memberProfile?.groupName.toLocaleLowerCase('de-DE') ?? '';
-          if (group.includes('alle') || group.includes('creepshow'))
-            return true;
-          if (!ownGroup) return false;
-          if (
-            group.includes('technik') &&
-            organization.groupVisibility.techOnly &&
-            !ownGroup.includes('technik') &&
-            !group.includes(ownGroup)
-          )
-            return false;
-          if (
-            group.includes('kostüm') &&
-            organization.groupVisibility.costumeOnly &&
-            !ownGroup.includes('kostüm')
-          )
-            return false;
-          return group.includes(ownGroup);
-        });
+      : allEvents.filter((event) =>
+          isEventVisibleToMember(
+            event.group,
+            memberProfile?.groupName ?? '',
+            organization.groupVisibility,
+          ),
+        );
   const attendanceRows = db
     .prepare(
       'SELECT event_id AS eventId, status, reason FROM attendance WHERE user_id = ?',
@@ -223,7 +216,7 @@ const actionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('attendance'),
     eventId: z.string().min(1).max(100),
-    status: z.enum(['yes', 'no']),
+    status: z.enum(['open', 'yes', 'no']),
     reason: z.string().trim().max(500).default(''),
   }),
   z.object({
@@ -328,14 +321,21 @@ export async function POST(request: NextRequest) {
         { error: 'Die Rückmeldefrist ist abgelaufen.' },
         { status: 409 },
       );
-    db.prepare(`INSERT INTO attendance (event_id, user_id, status, reason) VALUES (?, ?, ?, ?)
-      ON CONFLICT(event_id, user_id) DO UPDATE SET status = excluded.status, reason = excluded.reason, updated_at = CURRENT_TIMESTAMP`).run(
-      input.eventId,
-      user.userId,
-      input.status,
-      input.reason,
-    );
-    audit(user.userId, 'attendance.updated', 'event', input.eventId);
+    if (input.status === 'open') {
+      db.prepare(
+        'DELETE FROM attendance WHERE event_id = ? AND user_id = ?',
+      ).run(input.eventId, user.userId);
+      audit(user.userId, 'attendance.cleared', 'event', input.eventId);
+    } else {
+      db.prepare(`INSERT INTO attendance (event_id, user_id, status, reason) VALUES (?, ?, ?, ?)
+        ON CONFLICT(event_id, user_id) DO UPDATE SET status = excluded.status, reason = excluded.reason, updated_at = CURRENT_TIMESTAMP`).run(
+        input.eventId,
+        user.userId,
+        input.status,
+        input.reason,
+      );
+      audit(user.userId, 'attendance.updated', 'event', input.eventId);
+    }
   } else if (input.action === 'absence.create') {
     if (input.to < input.from)
       return NextResponse.json(
@@ -343,9 +343,35 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     const id = randomUUID();
-    db.prepare(
-      'INSERT INTO absences (id, user_id, date_from, date_to, reason) VALUES (?, ?, ?, ?, ?)',
-    ).run(id, user.userId, input.from, input.to, input.reason);
+    const member = db
+      .prepare(
+        'SELECT group_name AS groupName FROM members WHERE lower(email) = lower(?)',
+      )
+      .get(user.email) as { groupName: string } | undefined;
+    const organization = readOrganizationSettings(db);
+    const eventRows = db
+      .prepare(
+        `SELECT id, group_name AS 'group', starts_at AS startsAt FROM events WHERE starts_at IS NOT NULL`,
+      )
+      .all() as Array<{ id: string; group: string; startsAt: string }>;
+    const coveredEvents = eventsCoveredByAbsence(
+      eventRows,
+      input.from,
+      input.to,
+      member?.groupName ?? '',
+      organization.groupVisibility,
+    );
+    const saveAbsenceAndDeclines = db.transaction(() => {
+      db.prepare(
+        'INSERT INTO absences (id, user_id, date_from, date_to, reason) VALUES (?, ?, ?, ?, ?)',
+      ).run(id, user.userId, input.from, input.to, input.reason);
+      const saveDecline =
+        db.prepare(`INSERT INTO attendance (event_id, user_id, status, reason) VALUES (?, ?, 'no', ?)
+        ON CONFLICT(event_id, user_id) DO UPDATE SET status = 'no', reason = excluded.reason, updated_at = CURRENT_TIMESTAMP`);
+      for (const event of coveredEvents)
+        saveDecline.run(event.id, user.userId, input.reason);
+    });
+    saveAbsenceAndDeclines();
     audit(user.userId, 'absence.created', 'absence', id);
   } else if (input.action === 'absence.delete') {
     const result = db

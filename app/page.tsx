@@ -59,6 +59,7 @@ import {
 } from '@/components/ui/chart';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -651,7 +652,6 @@ export default function Home() {
   };
 
   const setResponse = async (eventId: string, response: Attendance) => {
-    if (response === 'open') return;
     setAttendanceByEvent((responses) => ({
       ...responses,
       [eventId]: response,
@@ -659,7 +659,9 @@ export default function Home() {
     setNotice(
       response === 'yes'
         ? 'Zusage gespeichert – schön, dass du dabei bist!'
-        : 'Absage gespeichert. Diese Wochenprobe kann bis 17:00 Uhr abgesagt werden.',
+        : response === 'no'
+          ? 'Absage gespeichert. Diese Wochenprobe kann bis 17:00 Uhr abgesagt werden.'
+          : 'Deine Rückmeldung wurde zurückgenommen.',
     );
     try {
       await mutate(
@@ -809,7 +811,7 @@ export default function Home() {
     try {
       await mutate({ action: 'absence.create', from, to, reason }, true);
       setAbsenceNotice(
-        'Abwesenheit gespeichert. Die Probenleitung wurde informiert.',
+        'Abwesenheit gespeichert. Deine Termine in diesem Zeitraum wurden automatisch abgesagt.',
       );
     } catch (error) {
       setAbsenceNotice(
@@ -2138,19 +2140,30 @@ function DashboardView({
               <div className="grid grid-cols-2 gap-2 sm:flex">
                 <Button
                   disabled={next.locked}
-                  onClick={() => setResponse('yes')}
+                  onClick={() =>
+                    setResponse(attendance === 'yes' ? 'open' : 'yes')
+                  }
                   variant="outline"
                   className={`h-11 rounded-sm px-5 font-mono text-[10px] font-bold uppercase tracking-[0.18em] transition ${attendance === 'yes' ? 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white' : 'border-border bg-white text-foreground hover:border-emerald-600 hover:bg-white hover:text-emerald-700'}`}
                 >
-                  <Check /> Ich komme
+                  <Check />
+                  {attendance === 'yes' ? 'Zusage zurücknehmen' : 'Ich komme'}
                 </Button>
                 <Button
                   disabled={next.locked}
-                  onClick={() => openEvent(next, 'decline')}
+                  onClick={() => {
+                    if (attendance === 'no') {
+                      setResponse('open');
+                      return;
+                    }
+                    setResponse('no');
+                    openEvent(next, 'decline');
+                  }}
                   variant="outline"
                   className={`h-11 rounded-sm px-5 font-mono text-[10px] font-bold uppercase tracking-[0.18em] transition ${attendance === 'no' ? 'border-red-700 bg-red-700 text-white hover:bg-red-800 hover:text-white' : 'border-border bg-white text-foreground hover:border-red-500 hover:bg-white hover:text-red-700'}`}
                 >
-                  <X /> Absagen
+                  <X />
+                  {attendance === 'no' ? 'Absage zurücknehmen' : 'Absagen'}
                 </Button>
               </div>
             </div>
@@ -2574,13 +2587,24 @@ function CalendarView({
                     aria-label={
                       event.locked
                         ? `Rückmeldefrist für ${event.title} abgelaufen`
-                        : `Zu ${event.title} zusagen`
+                        : attendanceByEvent[event.id] === 'yes'
+                          ? `Zusage für ${event.title} zurücknehmen`
+                          : `Zu ${event.title} zusagen`
                     }
                     title={
-                      event.locked ? 'Rückmeldefrist abgelaufen' : 'Zusagen'
+                      event.locked
+                        ? 'Rückmeldefrist abgelaufen'
+                        : attendanceByEvent[event.id] === 'yes'
+                          ? 'Zusage zurücknehmen'
+                          : 'Zusagen'
                     }
                     aria-pressed={attendanceByEvent[event.id] === 'yes'}
-                    onClick={() => setResponse(event.id, 'yes')}
+                    onClick={() =>
+                      setResponse(
+                        event.id,
+                        attendanceByEvent[event.id] === 'yes' ? 'open' : 'yes',
+                      )
+                    }
                     className={`grid size-9 place-items-center border transition disabled:cursor-not-allowed disabled:opacity-45 ${attendanceByEvent[event.id] === 'yes' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-border bg-background text-muted-foreground hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-700'}`}
                   >
                     <ThumbsUp className="size-4" />
@@ -2591,15 +2615,26 @@ function CalendarView({
                     aria-label={
                       event.locked
                         ? `Rückmeldefrist für ${event.title} abgelaufen`
-                        : `${event.title} mit Grund absagen`
+                        : attendanceByEvent[event.id] === 'no'
+                          ? `Absage für ${event.title} zurücknehmen`
+                          : `${event.title} absagen`
                     }
                     title={
                       event.locked
                         ? 'Rückmeldefrist abgelaufen'
-                        : 'Mit Grund absagen'
+                        : attendanceByEvent[event.id] === 'no'
+                          ? 'Absage zurücknehmen'
+                          : 'Absagen'
                     }
                     aria-pressed={attendanceByEvent[event.id] === 'no'}
-                    onClick={() => openEvent(event, 'decline')}
+                    onClick={() => {
+                      if (attendanceByEvent[event.id] === 'no') {
+                        setResponse(event.id, 'open');
+                        return;
+                      }
+                      setResponse(event.id, 'no');
+                      openEvent(event, 'decline');
+                    }}
                     className={`grid size-9 place-items-center border transition disabled:cursor-not-allowed disabled:opacity-45 ${attendanceByEvent[event.id] === 'no' ? 'border-red-700 bg-red-700 text-white' : 'border-border bg-background text-muted-foreground hover:border-red-600 hover:bg-red-50 hover:text-red-700'}`}
                   >
                     <ThumbsDown className="size-4" />
@@ -4021,9 +4056,24 @@ function EventDialog({
         }
       }}
     >
-      <DialogContent className="border border-border bg-popover p-0 sm:max-w-xl">
+      <DialogContent
+        showCloseButton={false}
+        className="grid-rows-[4px_minmax(0,1fr)] gap-0 !overflow-hidden border border-border bg-popover p-0 sm:max-w-xl"
+      >
         <div className={`h-1 ${toneClasses[event.tone]}`} />
-        <div className="p-5 sm:p-6">
+        <DialogClose
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="absolute right-2 top-2 z-20 bg-popover/95 shadow-sm"
+            />
+          }
+        >
+          <X aria-hidden="true" />
+          <span className="sr-only">Schließen</span>
+        </DialogClose>
+        <div className="min-h-0 touch-pan-y overflow-y-auto overscroll-contain p-5 [scrollbar-gutter:stable] sm:p-6">
           <DialogHeader>
             <div className="mb-2 flex flex-wrap gap-2">
               <StatusPill>{event.group}</StatusPill>
@@ -4113,7 +4163,7 @@ function EventDialog({
                 disabled={event.locked}
                 aria-pressed={attendance === 'yes'}
                 onClick={() => {
-                  setResponse('yes');
+                  setResponse(attendance === 'yes' ? 'open' : 'yes');
                   setDeclineOpen(false);
                 }}
                 variant="outline"
@@ -4125,25 +4175,38 @@ function EventDialog({
                 disabled={event.locked}
                 aria-pressed={attendance === 'no'}
                 onClick={() => {
+                  if (attendance !== 'no') setResponse('no');
                   setDeclineReason(savedDeclineReason);
                   setDeclineOpen(true);
                 }}
                 variant="outline"
-                className={`h-11 rounded-sm transition ${declineOpen || attendance === 'no' ? 'border-red-700 bg-red-700 text-white hover:bg-red-800 hover:text-white' : 'border-border bg-white text-foreground hover:border-red-500 hover:bg-white hover:text-red-700'}`}
+                className={`h-11 rounded-sm transition ${attendance === 'no' ? 'border-red-700 bg-red-700 text-white hover:bg-red-800 hover:text-white' : 'border-border bg-white text-foreground hover:border-red-500 hover:bg-white hover:text-red-700'}`}
               >
                 <ThumbsDown /> Absagen
               </Button>
             </div>
+            {attendance !== 'open' && !event.locked && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setResponse('open');
+                  setDeclineOpen(false);
+                }}
+                className="mt-2 h-9 w-full rounded-sm text-xs text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw /> Rückmeldung zurücknehmen
+              </Button>
+            )}
             {declineOpen && !event.locked && (
               <div className="mt-3 border border-red-600/20 bg-red-50 p-3">
                 <label
                   htmlFor="decline-reason"
                   className="grid gap-2 text-xs font-medium text-red-800"
                 >
-                  Grund für die Absage{' '}
+                  Grund für die Absage (optional){' '}
                   <Textarea
                     id="decline-reason"
-                    required
                     value={declineReason}
                     onChange={(changeEvent) =>
                       setDeclineReason(changeEvent.target.value)
@@ -4161,7 +4224,7 @@ function EventDialog({
                   }}
                   className="mt-3 h-10 w-full rounded-sm bg-red-700 text-white hover:bg-red-800 disabled:opacity-50"
                 >
-                  Absage mit Grund bestätigen
+                  Grund zur Absage speichern
                 </Button>
               </div>
             )}
