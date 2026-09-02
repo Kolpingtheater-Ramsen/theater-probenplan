@@ -69,6 +69,7 @@ export function GET(request: NextRequest) {
     FROM events ORDER BY COALESCE(starts_at, created_at), created_at`)
     .all() as Array<
     Record<string, unknown> & {
+      id: string;
       group: string;
       locked: number;
       isCustom: number;
@@ -116,6 +117,24 @@ export function GET(request: NextRequest) {
   const attendanceByEvent = Object.fromEntries(
     attendanceRows.map((row) => [row.eventId, row.status]),
   );
+  const memberAttendanceRows = db
+    .prepare(`SELECT a.event_id AS eventId, m.id AS memberId, a.status
+    FROM attendance a
+    INNER JOIN profiles p ON p.user_id = a.user_id
+    INNER JOIN members m ON lower(m.email) = lower(p.email)`)
+    .all() as Array<{
+    eventId: string;
+    memberId: number;
+    status: 'yes' | 'no';
+  }>;
+  const memberAttendanceByEvent = memberAttendanceRows.reduce<
+    Record<string, Record<string, 'yes' | 'no'>>
+  >((byEvent, row) => {
+    if (!events.some((event) => event.id === row.eventId)) return byEvent;
+    byEvent[row.eventId] ??= {};
+    byEvent[row.eventId][String(row.memberId)] = row.status;
+    return byEvent;
+  }, {});
   const declineReasons = Object.fromEntries(
     attendanceRows
       .filter((row) => row.reason)
@@ -180,6 +199,7 @@ export function GET(request: NextRequest) {
     events,
     customEvents,
     attendanceByEvent,
+    memberAttendanceByEvent,
     declineReasons,
     absences,
     organizationAbsenceCount,

@@ -17,12 +17,16 @@ import {
   CalendarCheck,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CircleAlert,
   ClipboardCheck,
   Clock3,
   Download,
+  Eye,
+  EyeOff,
   ExternalLink,
   LayoutDashboard,
   KeyRound,
@@ -102,6 +106,7 @@ type AppSnapshot = {
   events: EventItem[];
   customEvents: EventItem[];
   attendanceByEvent: Record<string, Attendance>;
+  memberAttendanceByEvent: Record<string, Record<string, Attendance>>;
   declineReasons: Record<string, string>;
   absences: AbsenceRecord[];
   organizationAbsenceCount: number;
@@ -370,6 +375,38 @@ function ProfileAvatar({
   );
 }
 
+function PasswordInput({
+  className = '',
+  ...props
+}: React.ComponentProps<typeof Input>) {
+  const [revealed, setRevealed] = useState(false);
+  const actionLabel = revealed ? 'Passwort verbergen' : 'Passwort anzeigen';
+  return (
+    <div className="relative">
+      <Input
+        {...props}
+        type={revealed ? 'text' : 'password'}
+        className={`${className} pr-12`}
+      />
+      <button
+        type="button"
+        aria-label={actionLabel}
+        aria-controls={props.id}
+        aria-pressed={revealed}
+        title={actionLabel}
+        onClick={() => setRevealed((value) => !value)}
+        className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted-foreground transition hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-primary"
+      >
+        {revealed ? (
+          <EyeOff className="size-4" aria-hidden="true" />
+        ) : (
+          <Eye className="size-4" aria-hidden="true" />
+        )}
+      </button>
+    </div>
+  );
+}
+
 function MemberAvatars({
   members,
   count = 4,
@@ -404,6 +441,9 @@ export default function Home() {
   const [loadError, setLoadError] = useState('');
   const [attendanceByEvent, setAttendanceByEvent] = useState<
     Record<string, Attendance>
+  >({});
+  const [memberAttendanceByEvent, setMemberAttendanceByEvent] = useState<
+    Record<string, Record<string, Attendance>>
   >({});
   const [declineReasons, setDeclineReasons] = useState<Record<string, string>>(
     {},
@@ -458,6 +498,7 @@ export default function Home() {
     setServerEvents(data.events);
     setCustomEvents(data.customEvents);
     setAttendanceByEvent(data.attendanceByEvent);
+    setMemberAttendanceByEvent(data.memberAttendanceByEvent);
     setDeclineReasons(data.declineReasons);
     setAbsences(data.absences);
     setOrganizationAbsenceCount(data.organizationAbsenceCount);
@@ -534,12 +575,15 @@ export default function Home() {
         : 'Absage gespeichert. Diese Wochenprobe kann bis 17:00 Uhr abgesagt werden.',
     );
     try {
-      await mutate({
-        action: 'attendance',
-        eventId,
-        status: response,
-        reason: response === 'no' ? (declineReasons[eventId] ?? '') : '',
-      });
+      await mutate(
+        {
+          action: 'attendance',
+          eventId,
+          status: response,
+          reason: response === 'no' ? (declineReasons[eventId] ?? '') : '',
+        },
+        true,
+      );
     } catch (error) {
       setNotice(
         error instanceof Error
@@ -554,12 +598,15 @@ export default function Home() {
     setDeclineReasons((reasons) => ({ ...reasons, [eventId]: reason.trim() }));
     setAttendanceByEvent((responses) => ({ ...responses, [eventId]: 'no' }));
     try {
-      await mutate({
-        action: 'attendance',
-        eventId,
-        status: 'no',
-        reason: reason.trim(),
-      });
+      await mutate(
+        {
+          action: 'attendance',
+          eventId,
+          status: 'no',
+          reason: reason.trim(),
+        },
+        true,
+      );
       setNotice(
         'Absage gespeichert. Die Probenleitung kann den Grund jetzt sehen.',
       );
@@ -1142,6 +1189,10 @@ export default function Home() {
       <EventDialog
         event={selectedEvent}
         members={members}
+        currentUserName={appUser.displayName}
+        memberAttendance={
+          selectedEvent ? (memberAttendanceByEvent[selectedEvent.id] ?? {}) : {}
+        }
         onClose={() => setSelectedEvent(null)}
         attendance={
           selectedEvent
@@ -1432,10 +1483,9 @@ export default function Home() {
               className="grid gap-2 text-xs font-medium"
             >
               Startpasswort
-              <Input
+              <PasswordInput
                 id="member-password"
                 name="password"
-                type="password"
                 required
                 minLength={12}
                 className="h-11"
@@ -1575,10 +1625,9 @@ function PasswordChangeDialog({
             className="grid gap-2 text-xs font-medium"
           >
             Neues Passwort
-            <Input
+            <PasswordInput
               id="new-password"
               name="password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={12}
@@ -1590,10 +1639,9 @@ function PasswordChangeDialog({
             className="grid gap-2 text-xs font-medium"
           >
             Passwort wiederholen
-            <Input
+            <PasswordInput
               id="new-password-confirmation"
               name="confirmation"
-              type="password"
               autoComplete="new-password"
               required
               minLength={12}
@@ -1812,10 +1860,9 @@ function AuthGate({
               className="grid gap-2 text-sm font-medium"
             >
               Passwort
-              <Input
+              <PasswordInput
                 id="auth-password"
                 name="password"
-                type="password"
                 autoComplete={needsSetup ? 'new-password' : 'current-password'}
                 required
                 minLength={needsSetup ? 12 : 1}
@@ -3692,13 +3739,15 @@ function ParticipantList({
   title,
   tone,
   members,
-  remaining,
 }: {
   title: string;
   tone: 'yes' | 'no' | 'open';
   members: MemberProfile[];
-  remaining: number;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const collapsedCount = 4;
+  const visibleMembers = expanded ? members : members.slice(0, collapsedCount);
+  const remaining = Math.max(members.length - visibleMembers.length, 0);
   const toneClass =
     tone === 'yes'
       ? 'border-emerald-600/20 bg-emerald-50 text-emerald-800'
@@ -3708,10 +3757,10 @@ function ParticipantList({
   return (
     <div className={`border p-2.5 ${toneClass}`}>
       <p className="font-mono text-[8px] font-bold uppercase tracking-[0.16em]">
-        {title}
+        {title} · {members.length}
       </p>
       <div className="mt-2 space-y-1.5">
-        {members.map((member) => (
+        {visibleMembers.map((member) => (
           <div key={member.id} className="flex items-center gap-2">
             <ProfileAvatar
               name={member.name}
@@ -3725,8 +3774,23 @@ function ParticipantList({
             </span>
           </div>
         ))}
-        {remaining > 0 && (
-          <p className="pt-1 text-[8px] opacity-70">+ {remaining} weitere</p>
+        {members.length === 0 && (
+          <p className="pt-1 text-[9px] opacity-70">Noch niemand</p>
+        )}
+        {(remaining > 0 || expanded) && members.length > collapsedCount && (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+            className="mt-1 flex w-full items-center justify-between border-t border-current/15 pt-2 text-left text-[9px] font-bold underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
+          >
+            {expanded ? 'Weniger anzeigen' : `${remaining} weitere anzeigen`}
+            {expanded ? (
+              <ChevronUp className="size-3" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="size-3" aria-hidden="true" />
+            )}
+          </button>
         )}
       </div>
     </div>
@@ -3736,6 +3800,8 @@ function ParticipantList({
 function EventDialog({
   event,
   members,
+  currentUserName,
+  memberAttendance,
   onClose,
   attendance,
   savedDeclineReason,
@@ -3746,6 +3812,8 @@ function EventDialog({
 }: {
   event: EventItem | null;
   members: MemberProfile[];
+  currentUserName: string;
+  memberAttendance: Record<string, Attendance>;
   onClose: () => void;
   attendance: Attendance;
   savedDeclineReason: string;
@@ -3757,27 +3825,16 @@ function EventDialog({
   const [declineOpen, setDeclineOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const participantGroups = useMemo(() => {
-    const logge = members.find((member) => member.name === 'Logge');
-    const attending = members.filter((member) => member.present);
-    const absent = members.filter((member) => !member.present);
+    const statusFor = (member: MemberProfile) =>
+      member.name === currentUserName
+        ? attendance
+        : (memberAttendance[String(member.id)] ?? 'open');
     return {
-      yes: [
-        ...(attendance === 'yes' && logge ? [logge] : []),
-        ...attending.filter((member) => member.id !== logge?.id).slice(0, 4),
-      ],
-      no: [
-        ...(attendance === 'no' && logge ? [logge] : []),
-        ...absent.filter((member) => member.id !== logge?.id).slice(0, 2),
-      ],
-      open:
-        attendance === 'open' && logge
-          ? [
-              logge,
-              ...members.filter((member) => member.id !== logge.id).slice(0, 1),
-            ]
-          : members.slice(0, 2),
+      yes: members.filter((member) => statusFor(member) === 'yes'),
+      no: members.filter((member) => statusFor(member) === 'no'),
+      open: members.filter((member) => statusFor(member) === 'open'),
     };
-  }, [attendance, members]);
+  }, [attendance, currentUserName, memberAttendance, members]);
   if (!event) return null;
   return (
     <Dialog
@@ -3838,16 +3895,20 @@ function EventDialog({
             <div className="mt-4 grid grid-cols-3 gap-2 text-center">
               <div className="border border-emerald-600/20 bg-emerald-50 p-2">
                 <p className="text-lg font-black text-emerald-700">
-                  {event.people}
+                  {participantGroups.yes.length}
                 </p>
                 <p className="text-[9px] text-muted-foreground">Zugesagt</p>
               </div>
               <div className="border border-red-600/20 bg-red-50 p-2">
-                <p className="text-lg font-black text-red-700">5</p>
+                <p className="text-lg font-black text-red-700">
+                  {participantGroups.no.length}
+                </p>
                 <p className="text-[9px] text-muted-foreground">Abgesagt</p>
               </div>
               <div className="border border-amber-600/20 bg-amber-50 p-2">
-                <p className="text-lg font-black text-amber-700">6</p>
+                <p className="text-lg font-black text-amber-700">
+                  {participantGroups.open.length}
+                </p>
                 <p className="text-[9px] text-muted-foreground">Offen</p>
               </div>
             </div>
@@ -3856,22 +3917,16 @@ function EventDialog({
                 title="Zugesagt"
                 tone="yes"
                 members={participantGroups.yes}
-                remaining={Math.max(
-                  event.people - participantGroups.yes.length,
-                  0,
-                )}
               />
               <ParticipantList
                 title="Abgesagt"
                 tone="no"
                 members={participantGroups.no}
-                remaining={Math.max(5 - participantGroups.no.length, 0)}
               />
               <ParticipantList
                 title="Offen"
                 tone="open"
                 members={participantGroups.open}
-                remaining={Math.max(6 - participantGroups.open.length, 0)}
               />
             </div>
           </div>
@@ -3882,6 +3937,7 @@ function EventDialog({
             <div className="grid grid-cols-2 gap-2">
               <Button
                 disabled={event.locked}
+                aria-pressed={attendance === 'yes'}
                 onClick={() => {
                   setResponse('yes');
                   setDeclineOpen(false);
@@ -3893,6 +3949,7 @@ function EventDialog({
               </Button>
               <Button
                 disabled={event.locked}
+                aria-pressed={attendance === 'no'}
                 onClick={() => {
                   setDeclineReason(savedDeclineReason);
                   setDeclineOpen(true);
