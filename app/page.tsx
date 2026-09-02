@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import {
   BarChart as RechartsBarChart,
@@ -70,9 +70,12 @@ import { Textarea } from '@/components/ui/textarea';
 
 type View = 'dashboard' | 'calendar' | 'polls' | 'stats' | 'admin' | 'checkin';
 type Attendance = 'open' | 'yes' | 'no';
+type EventDialogIntent = 'details' | 'decline';
+type AttendanceCounts = Record<Attendance, number>;
 type AbsenceRecord = { id: string; from: string; to: string; reason: string };
 type AppUser = {
   userId: string;
+  memberId: number | null;
   email: string;
   displayName: string;
   role: 'member' | 'admin';
@@ -134,7 +137,48 @@ type EventItem = {
   type: 'weekly' | 'other';
   tone: 'orange' | 'violet' | 'blue' | 'green';
   locked?: boolean;
+  startsAt?: string | null;
 };
+
+const emptyAttendanceCounts: AttendanceCounts = { yes: 0, no: 0, open: 0 };
+
+function groupMembersByAttendance({
+  members,
+  memberAttendance,
+  currentMemberId,
+  currentAttendance,
+}: {
+  members: MemberProfile[];
+  memberAttendance: Record<string, Attendance>;
+  currentMemberId: number | null;
+  currentAttendance: Attendance;
+}) {
+  const statusFor = (member: MemberProfile) =>
+    member.id === currentMemberId
+      ? currentAttendance
+      : (memberAttendance[String(member.id)] ?? 'open');
+  return {
+    yes: members.filter((member) => statusFor(member) === 'yes'),
+    no: members.filter((member) => statusFor(member) === 'no'),
+    open: members.filter((member) => statusFor(member) === 'open'),
+  };
+}
+
+function getRelativeEventLabel(startsAt?: string | null) {
+  if (!startsAt) return 'Nächster Termin';
+  const start = new Date(startsAt);
+  if (Number.isNaN(start.getTime())) return 'Nächster Termin';
+  const today = new Date();
+  const dayDifference = Math.round(
+    (Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()) -
+      Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) /
+      86_400_000,
+  );
+  if (dayDifference === 0) return 'Nächster Termin · heute';
+  if (dayDifference === 1) return 'Nächster Termin · morgen';
+  if (dayDifference > 1) return `Nächster Termin · in ${dayDifference} Tagen`;
+  return 'Nächster Termin';
+}
 
 const baseEvents: EventItem[] = [
   {
@@ -452,6 +496,8 @@ export default function Home() {
     'Bitte gib kurz Bescheid, ob du zur Probe kommst.',
   );
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
+  const [selectedEventIntent, setSelectedEventIntent] =
+    useState<EventDialogIntent>('details');
   const [absenceOpen, setAbsenceOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
   const [memberOpen, setMemberOpen] = useState(false);
@@ -550,9 +596,50 @@ export default function Home() {
   };
 
   const events = useMemo(() => serverEvents, [serverEvents]);
+  const currentDateLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('de-DE', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      }).format(new Date()),
+    [],
+  );
+
+  const attendanceCountsByEvent = useMemo(
+    () =>
+      Object.fromEntries(
+        events.map((event) => {
+          const groups = groupMembersByAttendance({
+            members,
+            memberAttendance: memberAttendanceByEvent[event.id] ?? {},
+            currentMemberId: appUser?.memberId ?? null,
+            currentAttendance: attendanceByEvent[event.id] ?? 'open',
+          });
+          return [
+            event.id,
+            {
+              yes: groups.yes.length,
+              no: groups.no.length,
+              open: groups.open.length,
+            },
+          ];
+        }),
+      ) as Record<string, AttendanceCounts>,
+    [
+      appUser?.memberId,
+      attendanceByEvent,
+      events,
+      memberAttendanceByEvent,
+      members,
+    ],
+  );
 
   const nextEvent = events[0];
   const attendance = attendanceByEvent[nextEvent.id] ?? 'open';
+  const nextAttendanceCounts =
+    attendanceCountsByEvent[nextEvent.id] ?? emptyAttendanceCounts;
 
   const presentCount = members.filter((member) => member.present).length;
 
@@ -620,7 +707,13 @@ export default function Home() {
     }
   };
 
-  const openEvent = (event: EventItem) => setSelectedEvent(event);
+  const openEvent = (
+    event: EventItem,
+    intent: EventDialogIntent = 'details',
+  ) => {
+    setSelectedEventIntent(intent);
+    setSelectedEvent(event);
+  };
 
   const downloadIcs = (event: EventItem) => {
     const startHour = event.time.slice(0, 2);
@@ -1007,7 +1100,7 @@ export default function Home() {
           </button>
           <div className="hidden lg:block">
             <p className="font-mono text-[9px] uppercase tracking-[0.32em] text-primary">
-              Dienstag · 01. September 2026
+              {currentDateLabel}
             </p>
             <h1 className="mt-1 text-xl font-black tracking-tight">
               {view === 'dashboard'
@@ -1041,6 +1134,7 @@ export default function Home() {
           {view === 'dashboard' && (
             <DashboardView
               attendance={attendance}
+              attendanceCounts={nextAttendanceCounts}
               displayName={appUser.displayName}
               notice={notice}
               setResponse={(response) => setResponse(nextEvent.id, response)}
@@ -1059,6 +1153,8 @@ export default function Home() {
             <CalendarView
               events={events}
               attendanceByEvent={attendanceByEvent}
+              attendanceCountsByEvent={attendanceCountsByEvent}
+              setResponse={setResponse}
               openEvent={openEvent}
               openCreate={() => setEventOpen(true)}
               canCreate={appUser.role === 'admin'}
@@ -1187,13 +1283,18 @@ export default function Home() {
       </nav>
 
       <EventDialog
+        key={`${selectedEvent?.id ?? 'closed'}:${selectedEventIntent}`}
         event={selectedEvent}
         members={members}
-        currentUserName={appUser.displayName}
+        currentMemberId={appUser.memberId}
         memberAttendance={
           selectedEvent ? (memberAttendanceByEvent[selectedEvent.id] ?? {}) : {}
         }
-        onClose={() => setSelectedEvent(null)}
+        startDecline={selectedEventIntent === 'decline'}
+        onClose={() => {
+          setSelectedEvent(null);
+          setSelectedEventIntent('details');
+        }}
         attendance={
           selectedEvent
             ? (attendanceByEvent[selectedEvent.id] ?? 'open')
@@ -1908,6 +2009,7 @@ function AuthGate({
 
 function DashboardView({
   attendance,
+  attendanceCounts,
   displayName,
   notice,
   setResponse,
@@ -1922,11 +2024,12 @@ function DashboardView({
   testReminder,
 }: {
   attendance: Attendance;
+  attendanceCounts: AttendanceCounts;
   displayName: string;
   notice: string;
   setResponse: (value: Attendance) => void;
   events: EventItem[];
-  openEvent: (event: EventItem) => void;
+  openEvent: (event: EventItem, intent?: EventDialogIntent) => void;
   openAbsence: () => void;
   navigate: (view: View) => void;
   reminders: { dayBefore: boolean; twoHours: boolean; changes: boolean };
@@ -1975,18 +2078,18 @@ function DashboardView({
             <div className="flex items-center gap-2">
               <span className="size-2 animate-pulse rounded-full bg-primary" />
               <p className="font-mono text-[10px] font-bold uppercase tracking-[0.28em] text-primary">
-                Nächste Probe · in 2 Tagen
+                {getRelativeEventLabel(next.startsAt)}
               </p>
             </div>
-            <StatusPill>Creepshow-Ensemble</StatusPill>
+            <StatusPill>{next.group}</StatusPill>
           </div>
           <div className="grid grid-cols-[76px_1fr] items-center gap-4 sm:grid-cols-[112px_1fr] sm:gap-6">
             <div className="date-ticket flex size-[76px] flex-col items-center justify-center border border-border bg-background sm:size-28">
               <span className="font-mono text-[8px] font-bold tracking-[0.2em] text-primary sm:text-[10px] sm:tracking-[0.28em]">
-                DO · SEP
+                {next.weekday.slice(0, 2).toUpperCase()} · {next.month}
               </span>
               <span className="mt-1 text-3xl font-black leading-none tracking-[-0.08em] sm:text-5xl">
-                03
+                {String(next.day).padStart(2, '0')}
               </span>
             </div>
             <div>
@@ -1994,17 +2097,16 @@ function DashboardView({
                 id="next-rehearsal"
                 className="text-2xl font-black leading-tight tracking-[-0.04em] sm:text-4xl"
               >
-                Wochenprobe
-                <span className="block text-primary sm:mt-1">„Creepshow“</span>
+                {next.title}
               </h2>
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground sm:mt-5 sm:text-sm">
                 <span className="inline-flex items-center gap-2">
                   <Clock3 className="size-4 text-primary" />
-                  19:00–21:00
+                  {next.time}
                 </span>
                 <span className="inline-flex items-center gap-2">
                   <MapPin className="size-4 text-primary" />
-                  Großer Saal
+                  {next.place}
                 </span>
               </div>
             </div>
@@ -2035,6 +2137,7 @@ function DashboardView({
               </div>
               <div className="grid grid-cols-2 gap-2 sm:flex">
                 <Button
+                  disabled={next.locked}
                   onClick={() => setResponse('yes')}
                   variant="outline"
                   className={`h-11 rounded-sm px-5 font-mono text-[10px] font-bold uppercase tracking-[0.18em] transition ${attendance === 'yes' ? 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white' : 'border-border bg-white text-foreground hover:border-emerald-600 hover:bg-white hover:text-emerald-700'}`}
@@ -2042,7 +2145,8 @@ function DashboardView({
                   <Check /> Ich komme
                 </Button>
                 <Button
-                  onClick={() => openEvent(next)}
+                  disabled={next.locked}
+                  onClick={() => openEvent(next, 'decline')}
                   variant="outline"
                   className={`h-11 rounded-sm px-5 font-mono text-[10px] font-bold uppercase tracking-[0.18em] transition ${attendance === 'no' ? 'border-red-700 bg-red-700 text-white hover:bg-red-800 hover:text-white' : 'border-border bg-white text-foreground hover:border-red-500 hover:bg-white hover:text-red-700'}`}
                 >
@@ -2055,7 +2159,10 @@ function DashboardView({
               onClick={() => openEvent(next)}
               className="mt-4 flex w-full items-center justify-between border-t border-border pt-3 text-left text-xs text-muted-foreground transition hover:text-primary sm:mt-5 sm:pt-4"
             >
-              <span>24 Zusagen · 6 Rückmeldungen offen</span>
+              <span>
+                {attendanceCounts.yes} zugesagt · {attendanceCounts.no} abgesagt
+                · {attendanceCounts.open} offen
+              </span>
               <ChevronRight className="size-4" />
             </button>
           </div>
@@ -2249,7 +2356,7 @@ function EventRow({
           {event.weekday} · {event.time}
         </p>
         <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.2em] text-primary">
-          {event.group} · {event.people} Personen
+          {event.group}
         </p>
       </div>
       {event.locked ? (
@@ -2293,13 +2400,17 @@ function ReminderRow({
 function CalendarView({
   events,
   attendanceByEvent,
+  attendanceCountsByEvent,
+  setResponse,
   openEvent,
   openCreate,
   canCreate,
 }: {
   events: EventItem[];
   attendanceByEvent: Record<string, Attendance>;
-  openEvent: (event: EventItem) => void;
+  attendanceCountsByEvent: Record<string, AttendanceCounts>;
+  setResponse: (eventId: string, response: Attendance) => void;
+  openEvent: (event: EventItem, intent?: EventDialogIntent) => void;
   openCreate: () => void;
   canCreate: boolean;
 }) {
@@ -2324,6 +2435,12 @@ function CalendarView({
   )
     .slice()
     .sort((a, b) => a.day - b.day);
+  const nextEventDay = events[0]?.day;
+  const today = new Date();
+  const currentDay =
+    today.getFullYear() === 2026 && today.getMonth() === 8
+      ? today.getDate()
+      : null;
   return (
     <>
       <SectionHeading
@@ -2418,16 +2535,34 @@ function CalendarView({
                 <div className="flex gap-3 font-mono text-[8px] uppercase tracking-[0.12em] text-muted-foreground">
                   <span>
                     <b className="block text-sm text-emerald-700">
-                      {event.people}
+                      {
+                        (
+                          attendanceCountsByEvent[event.id] ??
+                          emptyAttendanceCounts
+                        ).yes
+                      }
                     </b>
                     Zu
                   </span>
                   <span>
-                    <b className="block text-sm text-red-700">{index + 2}</b>Ab
+                    <b className="block text-sm text-red-700">
+                      {
+                        (
+                          attendanceCountsByEvent[event.id] ??
+                          emptyAttendanceCounts
+                        ).no
+                      }
+                    </b>
+                    Ab
                   </span>
                   <span>
                     <b className="block text-sm text-amber-700">
-                      {Math.max(2, 6 - index)}
+                      {
+                        (
+                          attendanceCountsByEvent[event.id] ??
+                          emptyAttendanceCounts
+                        ).open
+                      }
                     </b>
                     Offen
                   </span>
@@ -2435,19 +2570,37 @@ function CalendarView({
                 <div className="flex gap-1.5">
                   <button
                     type="button"
-                    aria-label={`Zu ${event.title} zusagen`}
-                    title="Zusagen"
-                    onClick={() => openEvent(event)}
-                    className={`grid size-9 place-items-center border transition ${attendanceByEvent[event.id] === 'yes' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-border bg-background text-muted-foreground hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-700'}`}
+                    disabled={event.locked}
+                    aria-label={
+                      event.locked
+                        ? `Rückmeldefrist für ${event.title} abgelaufen`
+                        : `Zu ${event.title} zusagen`
+                    }
+                    title={
+                      event.locked ? 'Rückmeldefrist abgelaufen' : 'Zusagen'
+                    }
+                    aria-pressed={attendanceByEvent[event.id] === 'yes'}
+                    onClick={() => setResponse(event.id, 'yes')}
+                    className={`grid size-9 place-items-center border transition disabled:cursor-not-allowed disabled:opacity-45 ${attendanceByEvent[event.id] === 'yes' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-border bg-background text-muted-foreground hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-700'}`}
                   >
                     <ThumbsUp className="size-4" />
                   </button>
                   <button
                     type="button"
-                    aria-label={`${event.title} mit Grund absagen`}
-                    title="Mit Grund absagen"
-                    onClick={() => openEvent(event)}
-                    className={`grid size-9 place-items-center border transition ${attendanceByEvent[event.id] === 'no' ? 'border-red-700 bg-red-700 text-white' : 'border-border bg-background text-muted-foreground hover:border-red-600 hover:bg-red-50 hover:text-red-700'}`}
+                    disabled={event.locked}
+                    aria-label={
+                      event.locked
+                        ? `Rückmeldefrist für ${event.title} abgelaufen`
+                        : `${event.title} mit Grund absagen`
+                    }
+                    title={
+                      event.locked
+                        ? 'Rückmeldefrist abgelaufen'
+                        : 'Mit Grund absagen'
+                    }
+                    aria-pressed={attendanceByEvent[event.id] === 'no'}
+                    onClick={() => openEvent(event, 'decline')}
+                    className={`grid size-9 place-items-center border transition disabled:cursor-not-allowed disabled:opacity-45 ${attendanceByEvent[event.id] === 'no' ? 'border-red-700 bg-red-700 text-white' : 'border-border bg-background text-muted-foreground hover:border-red-600 hover:bg-red-50 hover:text-red-700'}`}
                   >
                     <ThumbsDown className="size-4" />
                   </button>
@@ -2497,17 +2650,17 @@ function CalendarView({
                   return (
                     <div
                       key={`${day}-${index}`}
-                      className={`min-h-28 border-b border-r border-border p-2 ${outside ? 'bg-background/50 text-muted-foreground/40' : 'bg-card'} ${day === 3 && !outside ? 'ring-1 ring-inset ring-primary/40' : ''}`}
+                      className={`min-h-28 border-b border-r border-border p-2 ${outside ? 'bg-background/50 text-muted-foreground/40' : 'bg-card'} ${day === nextEventDay && !outside ? 'ring-1 ring-inset ring-primary/40' : ''}`}
                     >
                       <div className="flex items-center justify-between">
                         <span
-                          className={`grid size-7 place-items-center text-xs font-bold ${day === 1 && !outside ? 'rounded-full bg-primary text-primary-foreground' : ''}`}
+                          className={`grid size-7 place-items-center text-xs font-bold ${day === currentDay && !outside ? 'rounded-full bg-primary text-primary-foreground' : ''}`}
                         >
                           {day}
                         </span>
-                        {day === 3 && !outside && (
+                        {day === nextEventDay && !outside && (
                           <span className="font-mono text-[7px] uppercase tracking-wider text-primary">
-                            Nächste Probe
+                            Nächster Termin
                           </span>
                         )}
                       </div>
@@ -2526,7 +2679,13 @@ function CalendarView({
                               {event.title}
                             </span>
                             <span className="mt-1 block text-[8px] text-muted-foreground">
-                              {event.time.split('–')[0]} · {event.people}{' '}
+                              {event.time.split('–')[0]} ·{' '}
+                              {
+                                (
+                                  attendanceCountsByEvent[event.id] ??
+                                  emptyAttendanceCounts
+                                ).yes
+                              }{' '}
                               Zusagen
                             </span>
                           </button>
@@ -3800,8 +3959,9 @@ function ParticipantList({
 function EventDialog({
   event,
   members,
-  currentUserName,
+  currentMemberId,
   memberAttendance,
+  startDecline,
   onClose,
   attendance,
   savedDeclineReason,
@@ -3812,8 +3972,9 @@ function EventDialog({
 }: {
   event: EventItem | null;
   members: MemberProfile[];
-  currentUserName: string;
+  currentMemberId: number | null;
   memberAttendance: Record<string, Attendance>;
+  startDecline: boolean;
   onClose: () => void;
   attendance: Attendance;
   savedDeclineReason: string;
@@ -3822,19 +3983,32 @@ function EventDialog({
   downloadIcs: (event: EventItem) => void;
   openGoogleCalendar: (event: EventItem) => void;
 }) {
-  const [declineOpen, setDeclineOpen] = useState(false);
-  const [declineReason, setDeclineReason] = useState('');
-  const participantGroups = useMemo(() => {
-    const statusFor = (member: MemberProfile) =>
-      member.name === currentUserName
-        ? attendance
-        : (memberAttendance[String(member.id)] ?? 'open');
-    return {
-      yes: members.filter((member) => statusFor(member) === 'yes'),
-      no: members.filter((member) => statusFor(member) === 'no'),
-      open: members.filter((member) => statusFor(member) === 'open'),
-    };
-  }, [attendance, currentUserName, memberAttendance, members]);
+  const [declineOpen, setDeclineOpen] = useState(
+    startDecline && !event?.locked,
+  );
+  const [declineReason, setDeclineReason] = useState(
+    startDecline ? savedDeclineReason : '',
+  );
+  const responseSectionRef = useRef<HTMLDivElement>(null);
+  const participantGroups = useMemo(
+    () =>
+      groupMembersByAttendance({
+        members,
+        memberAttendance,
+        currentMemberId,
+        currentAttendance: attendance,
+      }),
+    [attendance, currentMemberId, memberAttendance, members],
+  );
+  useEffect(() => {
+    if (!event) return;
+    const shouldOpenDecline = startDecline && !event.locked;
+    if (!shouldOpenDecline) return;
+    const frame = window.requestAnimationFrame(() =>
+      responseSectionRef.current?.scrollIntoView({ block: 'center' }),
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, [event, savedDeclineReason, startDecline]);
   if (!event) return null;
   return (
     <Dialog
@@ -3930,7 +4104,7 @@ function EventDialog({
               />
             </div>
           </div>
-          <div className="mt-5">
+          <div ref={responseSectionRef} className="mt-5">
             <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.24em] text-muted-foreground">
               Deine Teilnahme
             </p>

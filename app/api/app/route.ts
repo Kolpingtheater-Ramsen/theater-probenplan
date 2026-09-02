@@ -59,13 +59,13 @@ export function GET(request: NextRequest) {
     : organizationDefault;
   const memberProfile = db
     .prepare(
-      'SELECT group_name AS groupName, avatar_url AS avatar FROM members WHERE lower(email) = lower(?)',
+      'SELECT id AS memberId, group_name AS groupName, avatar_url AS avatar FROM members WHERE lower(email) = lower(?)',
     )
     .get(user.email) as
-    | { groupName: string; avatar: string | null }
+    | { memberId: number; groupName: string; avatar: string | null }
     | undefined;
   const eventRows = db
-    .prepare(`SELECT id, day, month, weekday, title, time_label AS time, place, group_name AS 'group', people, kind AS type, tone, locked, is_custom AS isCustom
+    .prepare(`SELECT id, day, month, weekday, title, time_label AS time, place, group_name AS 'group', people, kind AS type, tone, locked, is_custom AS isCustom, starts_at AS startsAt
     FROM events ORDER BY COALESCE(starts_at, created_at), created_at`)
     .all() as Array<
     Record<string, unknown> & {
@@ -195,7 +195,11 @@ export function GET(request: NextRequest) {
     (event) => (event as { isCustom: boolean }).isCustom,
   );
   return NextResponse.json({
-    user: { ...user, avatar: memberProfile?.avatar ?? null },
+    user: {
+      ...user,
+      memberId: memberProfile?.memberId ?? null,
+      avatar: memberProfile?.avatar ?? null,
+    },
     events,
     customEvents,
     attendanceByEvent,
